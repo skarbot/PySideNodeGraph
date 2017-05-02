@@ -303,8 +303,8 @@ class NodeItem(QtGui.QGraphicsRectItem):
             return
         rect = self.rect()
         x1, y1, w, h = rect.x(), rect.y(), rect.width(), rect.height()
-        painter.setPen(QtGui.QColor('#8e612e'))
         painter.setBrush(QtGui.QColor('#8e612e'))
+        painter.setPen(QtGui.QColor('#ffb72c'))
         painter.drawRect(x1, y1, w, h)
 
     def _calcSize(self):
