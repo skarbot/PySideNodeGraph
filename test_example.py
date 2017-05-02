@@ -1,7 +1,7 @@
 #!/usr/bin/python
 import sys
 
-from PySide import QtGui
+from PySide import QtGui, QtCore
 
 from pySideNodeGraph import NodeItem
 from pySideNodeGraph import NodeScene, NodeViewer
@@ -39,6 +39,11 @@ class NodeGraph(QtGui.QWidget):
         assert isinstance(node, NodeItem), 'node must be a NodeItem'
         node.setPos(xpos, ypos)
         self.nodeScene.addItem(node)
+
+    def keyPressEvent(self, event):
+        key = event.key()
+        if key == QtCore.Qt.Key_Escape:
+            self.close()
 
 
 if __name__ == '__main__':
