@@ -459,6 +459,7 @@ class NodeScene(QtGui.QGraphicsScene):
         self.setBackgroundBrush(QtGui.QBrush(QtGui.QColor(self._color)))
 
 
+
 class NodeViewer(QtGui.QGraphicsView):
     def __init__(self, scene, parent=None):
         super(NodeViewer, self).__init__(scene, parent)
@@ -595,3 +596,30 @@ class NodeViewer(QtGui.QGraphicsView):
         self._extendConnection = False
         self.setDragMode(self.DragMode.NoDrag)
         super(NodeViewer, self).keyReleaseEvent(event)
+
+    def drawBackground(self, painter, rect):
+        brush = QtGui.QBrush(QtGui.QColor('black'))
+        painter.setBrush(brush)
+        painter.drawRect(rect)
+
+        gridSize = 50
+
+        left = int(rect.left()) - (int(rect.left()) % gridSize)
+        top = int(rect.top()) - (int(rect.top()) % gridSize)
+
+        # QVarLengthArray < QLineF, 100 > lines;
+        lines = []
+
+        painter.setPen(QtCore.Qt.darkGray)
+
+        for x  in range(left, int(rect.right()), gridSize):
+
+            #lines.append(QtCore.QLine(x, rect.top(), x, rect.bottom()))
+
+            for y in range(top,  int(rect.bottom()), gridSize):
+                painter.drawPoint(x, y)#rect)
+            #lines.append(QtCore.QLine(rect.left(), y, rect.right(), y));
+
+
+        #painter.drawText(rect(), QtCore.Qt.AlignCenter, "Qt")
+        painter.drawLines(lines)
