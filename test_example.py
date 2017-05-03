@@ -9,31 +9,32 @@ from pySideNodeGraph import NodeScene, NodeViewer
 
 class TestNode(NodeItem):
 
-    def __init__(self, name='Foo Bar', parent=None):
+    def __init__(self, name='Node', parent=None):
         super(TestNode, self).__init__(name, parent)
-        self.addInputPort(label='one only', connectionLimit=1)
-        self.addInputPort(label='limit 2', connectionLimit=2)
-        self.addInputPort(label='test')
+        self.addInputPort(label='input 1')
+        self.addInputPort(label='input 2 (limit: 4)', connectionLimit=4)
+        self.addInputPort(label='input 3')
 
-        self.addOutputPort(label='hello')
-        self.addOutputPort(label='world')
-        self.addOutputPort(label='test')
+        self.addOutputPort(label='output 1')
+        self.addOutputPort(label='output 2')
+        self.addOutputPort(label='output 3')
 
 
 class NodeGraph(QtGui.QWidget):
 
     def __init__(self, parent=None):
         super(NodeGraph, self).__init__(parent)
-        self.setWindowTitle('Noodle Graph')
+        self.setWindowTitle('PySide Node Graph')
         self.nodeScene = NodeScene(self)
         self.nodeViewer = NodeViewer(self.nodeScene, self)
 
         layout = QtGui.QVBoxLayout(self)
         layout.addWidget(self.nodeViewer)
 
-        self.addNode(TestNode(), -50, 0)
-        self.addNode(TestNode(), 150, -200)
-        self.addNode(TestNode(), 200, 100)
+        self.addNode(TestNode('My Node 1'), -500, 0)
+        self.addNode(TestNode('My Node 2'), -500, -200)
+        self.addNode(TestNode('My Node 3'), -500, 100)
+        self.addNode(TestNode('My Node 4'), -500, 200)
 
     def addNode(self, node, xpos=0, ypos=0):
         assert isinstance(node, NodeItem), 'node must be a NodeItem'
