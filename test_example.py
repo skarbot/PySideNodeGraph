@@ -14,6 +14,7 @@ class TestNode(NodeItem):
         self.addInputPort(label='input 1')
         self.addInputPort(label='input 2 (limit: 4)', connectionLimit=4)
         self.addInputPort(label='input 3')
+        self.addInputPort(label='input 4')
 
         self.addOutputPort(label='output 1')
         self.addOutputPort(label='output 2')
@@ -32,9 +33,9 @@ class NodeGraph(QtGui.QWidget):
         layout.addWidget(self.nodeViewer)
 
         self.addNode(TestNode('My Node 1'), -500, 0)
-        self.addNode(TestNode('My Node 2'), -500, -200)
-        self.addNode(TestNode('My Node 3'), -500, 100)
-        self.addNode(TestNode('My Node 4'), -500, 200)
+        self.addNode(TestNode('My Node 2'), -500, -150)
+        self.addNode(TestNode('My Node 3'), -800, -150)
+        self.addNode(TestNode('My Node 4'), -800, 0)
 
     def addNode(self, node, xpos=0, ypos=0):
         assert isinstance(node, NodeItem), 'node must be a NodeItem'

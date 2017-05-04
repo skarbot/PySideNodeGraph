@@ -82,10 +82,10 @@ class PipeConnection(object):
             tangent *= -1
         if tangent > parentRect.width():
             tangent = parentRect.width()
-        if self.fromPort.portType == 'in':
+        if self.fromPort._portType == 'in':
             cp1_offset -= tangent
             cp2_offset += tangent
-        elif self.fromPort.portType == 'out':
+        elif self.fromPort._portType == 'out':
             cp1_offset += tangent
             cp2_offset -= tangent
         cp1 = QtCore.QPointF(cp1_offset, pos1.y())
@@ -130,10 +130,10 @@ class PipeConnection(object):
             self.pos2 = self.toPort.scenePos()
             self.toPort.posCallbacks.append(self.setEndPos)
             self.toPort._connectedPipes.append(self._pipe)
-            self._pipePortSetter[self.toPort.portType](self.fromPort)
+            self._pipePortSetter[self.toPort._portType](self.fromPort)
 
             self.fromPort._connectedPipes.append(self._pipe)
-            self._pipePortSetter[self.fromPort.portType](self.toPort)
+            self._pipePortSetter[self.fromPort._portType](self.toPort)
 
     def deleteConnection(self):
         self._pipe.delete()
@@ -146,8 +146,9 @@ class PortItem(QtGui.QGraphicsEllipseItem):
     PortItem to a NodeItem
     """
 
-    def __init__(self, parent=None, name='port', portType='out', connectionLimit=-1, portSize=8.0):
-        super(PortItem, self).__init__(QtCore.QRectF(-portSize/2, -portSize/2, portSize, portSize), parent)
+    def __init__(self, parent=None, name='port', portType='out', limit=-1):
+        super(PortItem, self).__init__(
+            QtCore.QRectF(-4.0, -4.0, 8.0, 8.0), parent)
         self.setAcceptHoverEvents(True)
         self.setFlag(self.ItemSendsScenePositionChanges, True)
         self._connectedPipes = []
@@ -155,13 +156,18 @@ class PortItem(QtGui.QGraphicsEllipseItem):
         self._colorClicked = ('#6A3C56', '#AF8BA6')
         self.setBrush(QtGui.QBrush(QtGui.QColor(self._colorDefault[0])))
         self.setPen(QtGui.QPen(QtGui.QColor(self._colorDefault[1]), 1))
-        self.name = name
-        self.portType = portType
-        self.connectionLimit = connectionLimit
+        self._name = name
+        self._portType = portType
+        self._limit = limit
         self.posCallbacks = []
 
     def __str__(self):
-        return 'PortItem(\'{}\', \'{}\')'.format(self.name, self.portType)
+        kwargs = {
+            'name': self._name,
+            'portType': self._portType,
+            'limit': self._limit
+        }
+        return 'PortItem(\'{name}\', \'{portType}\', \'{limit}\')'.format(**kwargs)
 
     def itemChange(self, change, value):
         if change == self.ItemScenePositionHasChanged:
@@ -196,9 +202,9 @@ class PortItem(QtGui.QGraphicsEllipseItem):
     def getConnectedPorts(self):
         ports = []
         for pipe in self._connectedPipes:
-            if self.portType == 'in':
+            if self._portType == 'in':
                 ports.append(pipe.getOutPort())
-            elif self.portType == 'out':
+            elif self._portType == 'out':
                 ports.append(pipe.getInPort())
         return ports
 
@@ -258,12 +264,11 @@ class NodeItem(QtGui.QGraphicsRectItem):
         super(NodeItem, self).__init__(parent)
         self.setFlags(self.ItemIsSelectable | self.ItemIsMovable)
         self.setPen(QtGui.QPen(QtGui.QColor('#186187'), 1))
-        self.name = name
-        self._width = 50.0
-        self._height = 100.0
+        self._name = name
         self._colorBg = '#0B0E13'
         self._textColor = '#C4E8EB'
-        self._label = QtGui.QGraphicsTextItem(self.name, self)
+        self._width = 150
+        self._height = 100
 
         # inputs and outputs of node:
         self._inputs = []
@@ -271,25 +276,26 @@ class NodeItem(QtGui.QGraphicsRectItem):
         self._outputs = []
         self._outputsTexts = []
 
+        self._label = QtGui.QGraphicsTextItem(self._name, self)
+
         # Create corner for resize:
         self._sizer = NodeSizerItem(self)
         self._sizer.posChangeCallbacks.append(self.setSize)
         self._sizer.setFlag(self._sizer.ItemIsSelectable, True)
         self._sizer.setPos(self._width, self._height)
         self.setToolTip(
-            'Resize: {}\n(Double Click to Reset)'.format(self.name))
+            'Resize: {}\n(Double Click to Reset)'.format(self._name))
 
         self.setBackgroundColor(self._colorBg)
         self.setTextColor(self._textColor)
         self.setResizable(True)
 
     def __str__(self):
-        return 'NodeItem(name=\'{}\')'.format(self.name)
+        return 'NodeItem(name=\'{}\')'.format(self._name)
 
     def mouseMoveEvent(self, event):
         super(NodeItem, self).mouseMoveEvent(event)
-    #     self.setSelected(False)
-    #
+
     def mousePressEvent(self, event):
         super(NodeItem, self).mousePressEvent(event)
 
@@ -301,16 +307,13 @@ class NodeItem(QtGui.QGraphicsRectItem):
         texts_items = [self._label]
         texts_items += self._outputsTexts
         texts_items += self._inputsTexts
-
         if not self.isSelected():
             for text in texts_items:
                 text.setDefaultTextColor(QtGui.QColor(self._textColor))
             super(NodeItem, self).paint(painter, option, widget)
             return
-
         for text in texts_items:
             text.setDefaultTextColor(QtGui.QColor('#ffb72c'))
-
         rect = self.rect()
         x1, y1, w, h = rect.x(), rect.y(), rect.width(), rect.height()
         painter.setBrush(QtGui.QColor('#674303'))
@@ -318,28 +321,22 @@ class NodeItem(QtGui.QGraphicsRectItem):
         painter.drawRect(x1, y1, w, h)
 
     def _calcSize(self):
-        inWidth, outWidth = 0, 0
-        portHeight = 50
+        width = self._label.boundingRect().width() * 2
         if self._inputs:
-            for text in self._inputsTexts:
-                if text.boundingRect().width() > inWidth:
-                    inWidth = text.boundingRect().width()
-            inWidth += (self._inputs[0].boundingRect().width() * 2)
-            portHeight = self._inputs[0].boundingRect().height()
+            pWidths = [(p.boundingRect().width() * 2) for p in self._inputs]
+            width += max(pWidths)
+            width += pWidths[0]
         if self._outputs:
-            for text in self._outputsTexts:
-                if text.boundingRect().width() > outWidth:
-                    outWidth = text.boundingRect().width()
-            outWidth += (self._outputs[0].boundingRect().width() * 2)
-            portHeight = self._outputs[0].boundingRect().height()
-
-        width = (inWidth + outWidth) + (self._label.boundingRect().width()/2)
-        height = portHeight * (max(len(self._inputs), len(self._outputs)) + 4)
+            pWidths = [(p.boundingRect().width() * 2) for p in self._outputs]
+            width += max(pWidths)
+            width += pWidths[0]
+        pCount = max([len(self._inputs), len(self._outputs)]) + 1
+        height = (PortItem().boundingRect().height() * 2) * pCount
         return width, height
 
     def _addPort(self, name, type, connectionLimit):
         port = PortItem(self, name, type, connectionLimit)
-        text = QtGui.QGraphicsTextItem(port.name, self)
+        text = QtGui.QGraphicsTextItem(port._name, self)
         text.setDefaultTextColor(QtGui.QColor('#5ED79F'))
         font = text.font()
         font.setPointSize(8)
@@ -374,21 +371,12 @@ class NodeItem(QtGui.QGraphicsRectItem):
             w (float): width of the circle.
             h (float): height of the circle.
         """
-        labelRect = self._label.boundingRect()
-        inPortWH = (0, 0)
-        outPortWH = (0, 0)
-        if self._inputsTexts:
-            pRect = self._inputsTexts[0].boundingRect()
-            inPortWH = (pRect.width(), pRect.height())
-        if self._outputsTexts:
-            pRect = self._outputsTexts[0].boundingRect()
-            outPortWH = (pRect.width(), pRect.height())
-
         # limit node size:
         if h < self._height:
             h = self._height
         if w < self._width:
             w = self._width
+
         self.setRect(0.0, 0.0, w, h)
 
         # center label:
@@ -399,46 +387,58 @@ class NodeItem(QtGui.QGraphicsRectItem):
         self._label.setPos(lx, ly)
 
         # update port positions:
-        padding = (7.5, 4)
         if len(self._inputs) == 1:
-            self._inputs[0].setPos(padding[0], h / 2)
-        elif len(self._inputs) > 1:
-            y = 5
-            dy = (h - 15) / (len(self._inputs) - 1)
-            for inp in self._inputs:
-                if inp == self._inputs[0]:
-                    inp.setPos(padding[0], y + (inPortWH[1] / 2))
-                elif inp == self._inputs[-1]:
-                    inp.setPos(padding[0], y - (inPortWH[1] / 2))
+            paddingW = self._inputs[0].boundingRect().width()
+            self._inputs[0].setPos(paddingW, h / 2)
+        elif self._inputs:
+            paddingW = self._inputs[0].boundingRect().width()
+            paddingH = self._inputs[0].boundingRect().height()
+            yChunk = h / (len(self._inputs) - 1)
+            y = 0
+            for port in self._inputs:
+                if port == self._inputs[0]:
+                    port.setPos(paddingW, paddingH)
+                elif port == self._inputs[-1]:
+                    port.setPos(paddingW, h - paddingH)
                 else:
-                    inp.setPos(padding[0], y)
-                y += dy
+                    port.setPos(paddingW, y)
+                y += yChunk
+
         if len(self._outputs) == 1:
-            self._outputs[0].setPos(w-padding[0], h / 2)
-        elif len(self._outputs) > 1:
-            y = 5
-            dy = (h - 10) / (len(self._outputs) - 1)
-            for outp in self._outputs:
-                if outp == self._outputs[0]:
-                    outp.setPos(w-padding[0], y + (outPortWH[1] / 2))
-                elif outp == self._outputs[-1]:
-                    outp.setPos(w-padding[0], y - (outPortWH[1] / 2))
+            paddingW = self._outputs[0].boundingRect().width()
+            self._outputs[0].setPos(paddingW, h / 2)
+        elif self._outputs:
+            paddingW = self._outputs[0].boundingRect().width()
+            paddingH = self._outputs[0].boundingRect().height()
+            yChunk = h / (len(self._outputs) - 1)
+            y = 0
+            for port in self._outputs:
+                if port == self._outputs[0]:
+                    port.setPos(w - paddingW, paddingH)
+                elif port == self._outputs[-1]:
+                    port.setPos(w - paddingW, h - paddingH)
                 else:
-                    outp.setPos(w-padding[0], y)
-                y += dy
+                    port.setPos(w - paddingW, y)
+                y += yChunk
 
         # update text position
-        for idx, txt in enumerate(self._inputsTexts):
+        for idx, text in enumerate(self._inputsTexts):
             pRect = self._inputs[idx].boundingRect()
             pw, ph = pRect.width(), pRect.height()
-            tHeight = txt.boundingRect().height()
-            txt.setPos(self._inputs[idx].x()+(pw/2), self._inputs[idx].y()-(tHeight/2))
-        for idx, txt in enumerate(self._outputsTexts):
+            txtHeight = text.boundingRect().height()
+            text.setPos(
+                self._inputs[idx].x() + (pw / 2),
+                self._inputs[idx].y() - (txtHeight / 2)
+            )
+        for idx, text in enumerate(self._outputsTexts):
             pRect = self._outputs[idx].boundingRect()
             pw, ph = pRect.width(), pRect.height()
-            tWidth = txt.boundingRect().width()
-            tHeight = txt.boundingRect().height()
-            txt.setPos((self._outputs[idx].x()-tWidth)-(pw/2), self._outputs[idx].y()-(tHeight/2))
+            txtWidth = text.boundingRect().width()
+            txtHeight = text.boundingRect().height()
+            text.setPos(
+                (self._outputs[idx].x() - txtWidth) - (pw / 2),
+                self._outputs[idx].y() - (txtHeight / 2)
+            )
         return w, h
 
     def setBackgroundColor(self, color):
@@ -514,7 +514,7 @@ class NodeViewer(QtGui.QGraphicsView):
             # print self._startPort.getConnectedPorts()
 
             if len(self._preExistingPipes) == 1:
-                if (port.portType == 'out') and (self._extendConnection):
+                if (port._portType == 'out') and (self._extendConnection):
                     return
                 self._preExistingPipes[0].setDottedLine(True)
 
@@ -525,7 +525,7 @@ class NodeViewer(QtGui.QGraphicsView):
     def validateToPort(self, port):
         connectionChecks = [
             (port and port == self._startPort),
-            (port and port.portType == self._startPort.portType),
+            (port and port._portType == self._startPort._portType),
             (port and port.parentItem() == self._startPort.parentItem()),
             (port == None)]
         if True in connectionChecks:
@@ -554,11 +554,11 @@ class NodeViewer(QtGui.QGraphicsView):
             if len(self._preExistingPipes) == 1:
                 self._preExistingPipes[0].setDottedLine(False)
 
-            if (toPort.connectionLimit != -1):
-                while len(toPort.getConnectedPorts()) >= toPort.connectionLimit:
+            if (toPort._limit != -1):
+                while len(toPort.getConnectedPorts()) >= toPort._limit:
                     toPort.getConnectedPipes()[-1].delete()
 
-            if self._startPort.portType == 'in':
+            if self._startPort._portType == 'in':
                 if len(self._preExistingPipes) == 1:
                     if toPort in self._startPort.getConnectedPorts():
                         self._startedConnection.deleteConnection()
@@ -573,7 +573,7 @@ class NodeViewer(QtGui.QGraphicsView):
                     self._startedConnection.setEndPos(toPort.scenePos())
 
 
-            elif self._startPort.portType == 'out':
+            elif self._startPort._portType == 'out':
                 if len(self._preExistingPipes) == 1:
                     if toPort in self._startPort.getConnectedPorts():
                         self._startedConnection.deleteConnection()
