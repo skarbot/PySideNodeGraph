@@ -11,14 +11,14 @@ class TestNode(NodeItem):
 
     def __init__(self, name='Node', parent=None):
         super(TestNode, self).__init__(name, parent)
-        self.addInputPort(label='input 1')
-        self.addInputPort(label='input 2 (limit: 4)', connectionLimit=4)
-        self.addInputPort(label='input 3')
-        self.addInputPort(label='input 4')
+        self.add_input_port(label='input 1')
+        self.add_input_port(label='input 2 (limit: 4)', limit=4)
+        self.add_input_port(label='input 3')
+        self.add_input_port(label='input 4')
 
-        self.addOutputPort(label='output 1')
-        self.addOutputPort(label='output 2')
-        self.addOutputPort(label='output 3')
+        self.add_output_port(label='output 1')
+        self.add_output_port(label='output 2')
+        self.add_output_port(label='output 3')
 
 
 class NodeGraph(QtGui.QWidget):
