@@ -299,9 +299,8 @@ class NodeItem(BaseRectItem):
         self.setFlags(self.ItemIsSelectable | self.ItemIsMovable)
         # node
         self._text_bg_item = NodeTextBackground(self)
-        self._text_bg_item.set_node_color('#040b0e', '#0a0d0e')
         self._text_item = QtGui.QGraphicsTextItem(name, self._text_bg_item)
-        self._color_text = '#C4E8EB'
+        self._color_text = '#6b7781'
         self._width = 150
         self._height = 100
 
@@ -328,21 +327,21 @@ class NodeItem(BaseRectItem):
 
     def paint(self, painter, option, widget):
         if self.isSelected():
+            self._text_bg_item.set_node_color('#070b10', '#070b10')
             rect = self.rect()
             painter.setRenderHint(painter.Antialiasing, self._antialiasing)
             painter.setBrush(QtGui.QColor('#674303'))
             painter.setPen(QtGui.QPen(QtGui.QColor('#ffb72c'), 1))
             painter.drawRect(rect.x(), rect.y(), rect.width(), rect.height())
             text_color = QtGui.QColor('#ffb72c')
+            self._text_item.setDefaultTextColor(QtGui.QColor('#1d2e43'))
         else:
-            self._color_bg = '#2F3234'
-            self._color_border = '#575B5D'
             super(NodeItem, self).paint(painter, option, widget)
+            self._text_bg_item.set_node_color('#040b0e', '#0a0d0e')
             text_color = QtGui.QColor(self._color_text)
+            self._text_item.setDefaultTextColor(text_color)
 
-        texts_items = [self._text_item]
-        texts_items += self._outputsTexts
-        texts_items += self._inputsTexts
+        texts_items = self._inputsTexts + self._outputsTexts
         for text in texts_items:
             text.setDefaultTextColor(text_color)
 
@@ -372,7 +371,7 @@ class NodeItem(BaseRectItem):
     def _add_port(self, name, type, limit):
         port = PortItem(self, name, type, limit)
         text = QtGui.QGraphicsTextItem(port._name, self)
-        text.setDefaultTextColor(QtGui.QColor('#5ED79F'))
+        text.setDefaultTextColor(QtGui.QColor(self._color_text))
         font = text.font()
         font.setPointSize(8)
         text.setFont(font)
