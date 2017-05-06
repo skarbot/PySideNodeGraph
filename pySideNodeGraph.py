@@ -294,13 +294,14 @@ class NodeItem(BaseRectItem):
     Base Node Item
     """
 
-    def __init__(self, name='Node', parent=None):
+    def __init__(self, name='Node', icon=None, parent=None):
         super(NodeItem, self).__init__(parent)
         self.setFlags(self.ItemIsSelectable | self.ItemIsMovable)
         # node
         self._text_bg_item = NodeTextBackground(self)
         self._text_item = QtGui.QGraphicsTextItem(name, self._text_bg_item)
         self._color_text = '#6b7781'
+        self._color_text_bg = '#28333b'
         self._width = 150
         self._height = 100
 
@@ -334,10 +335,11 @@ class NodeItem(BaseRectItem):
             painter.setPen(QtGui.QPen(QtGui.QColor('#ffb72c'), 1))
             painter.drawRect(rect.x(), rect.y(), rect.width(), rect.height())
             text_color = QtGui.QColor('#ffb72c')
-            self._text_item.setDefaultTextColor(QtGui.QColor('#1d2e43'))
+            self._text_item.setDefaultTextColor(QtGui.QColor('#C58828'))
         else:
             super(NodeItem, self).paint(painter, option, widget)
-            self._text_bg_item.set_node_color('#040b0e', '#0a0d0e')
+            self._text_bg_item.set_node_color(
+                self._color_text_bg, self._color_text_bg)
             text_color = QtGui.QColor(self._color_text)
             self._text_item.setDefaultTextColor(text_color)
 
@@ -399,6 +401,15 @@ class NodeItem(BaseRectItem):
         """
         self._text_item.setPlainText(name)
 
+    def set_node_icon(self, icon):
+        """
+        Sets the icon for the current node.
+        Args:
+            icon (str): path to the icon image.
+        """
+        raise NotImplementedError
+
+
     def set_text_color(self, color='#C4E8EB'):
         """
         Set the color of the node text.
@@ -457,7 +468,7 @@ class NodeItem(BaseRectItem):
         # update label and background position:
         t_rect = self._text_item.boundingRect()
         tw, th = t_rect.width(), t_rect.height()
-        ty = (th + 2) * -1
+        ty = (th + 1) * -1
         self._text_bg_item.setRect(0, 0, width, th)
         self._text_bg_item.setPos(0, ty)
         self._text_item.setPos(2, 0)
