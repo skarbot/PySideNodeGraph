@@ -82,10 +82,10 @@ class PipeConnection(object):
             tangent *= -1
         if tangent > parentRect.width():
             tangent = parentRect.width()
-        if self.fromPort.portType == 'in':
+        if self.fromPort._portType == 'in':
             cp1_offset -= tangent
             cp2_offset += tangent
-        elif self.fromPort.portType == 'out':
+        elif self.fromPort._portType == 'out':
             cp1_offset += tangent
             cp2_offset -= tangent
         cp1 = QtCore.QPointF(cp1_offset, pos1.y())
@@ -130,10 +130,10 @@ class PipeConnection(object):
             self.pos2 = self.toPort.scenePos()
             self.toPort.posCallbacks.append(self.setEndPos)
             self.toPort._connectedPipes.append(self._pipe)
-            self._pipePortSetter[self.toPort.portType](self.fromPort)
+            self._pipePortSetter[self.toPort._portType](self.fromPort)
 
             self.fromPort._connectedPipes.append(self._pipe)
-            self._pipePortSetter[self.fromPort.portType](self.toPort)
+            self._pipePortSetter[self.fromPort._portType](self.toPort)
 
     def deleteConnection(self):
         self._pipe.delete()
@@ -146,8 +146,9 @@ class PortItem(QtGui.QGraphicsEllipseItem):
     PortItem to a NodeItem
     """
 
-    def __init__(self, parent=None, name='port', portType='out', connectionLimit=-1, portSize=8.0):
-        super(PortItem, self).__init__(QtCore.QRectF(-portSize/2, -portSize/2, portSize, portSize), parent)
+    def __init__(self, parent=None, name='port', portType='out', limit=-1):
+        super(PortItem, self).__init__(
+            QtCore.QRectF(-4.0, -4.0, 8.0, 8.0), parent)
         self.setAcceptHoverEvents(True)
         self.setFlag(self.ItemSendsScenePositionChanges, True)
         self._connectedPipes = []
@@ -155,13 +156,18 @@ class PortItem(QtGui.QGraphicsEllipseItem):
         self._colorClicked = ('#6A3C56', '#AF8BA6')
         self.setBrush(QtGui.QBrush(QtGui.QColor(self._colorDefault[0])))
         self.setPen(QtGui.QPen(QtGui.QColor(self._colorDefault[1]), 1))
-        self.name = name
-        self.portType = portType
-        self.connectionLimit = connectionLimit
+        self._name = name
+        self._portType = portType
+        self._limit = limit
         self.posCallbacks = []
 
     def __str__(self):
-        return 'PortItem(\'{}\', \'{}\')'.format(self.name, self.portType)
+        kwargs = {
+            'name': self._name,
+            'portType': self._portType,
+            'limit': self._limit
+        }
+        return 'PortItem(\'{name}\', \'{portType}\', \'{limit}\')'.format(**kwargs)
 
     def itemChange(self, change, value):
         if change == self.ItemScenePositionHasChanged:
@@ -179,7 +185,7 @@ class PortItem(QtGui.QGraphicsEllipseItem):
         self.setPen(QtGui.QPen(QtGui.QColor(self._colorDefault[1]), 1))
 
     def mousePressEvent(self, event):
-        viewer = self.scene().getNodeViewer()
+        viewer = self.scene().get_node_viewer()
         viewer.startConnection(self)
         self.setBrush(QtGui.QBrush(QtGui.QColor(self._colorClicked[0])))
         self.setPen(QtGui.QPen(QtGui.QColor(self._colorClicked[1]), 2))
@@ -196,9 +202,9 @@ class PortItem(QtGui.QGraphicsEllipseItem):
     def getConnectedPorts(self):
         ports = []
         for pipe in self._connectedPipes:
-            if self.portType == 'in':
+            if self._portType == 'in':
                 ports.append(pipe.getOutPort())
-            elif self.portType == 'out':
+            elif self._portType == 'out':
                 ports.append(pipe.getInPort())
         return ports
 
@@ -233,7 +239,7 @@ class NodeSizerItem(QtGui.QGraphicsEllipseItem):
         return super(NodeSizerItem, self).itemChange(change, value)
 
     def mouseDoubleClickEvent(self, event):
-        self.parentItem().adjustSize()
+        self.parentItem().reset_size()
         super(NodeSizerItem, self).mouseDoubleClickEvent(event)
 
     def mouseMoveEvent(self, event):
@@ -249,98 +255,125 @@ class NodeSizerItem(QtGui.QGraphicsEllipseItem):
         self.setSelected(False)
 
 
-class NodeItem(QtGui.QGraphicsRectItem):
+class BaseRectItem(QtGui.QGraphicsRectItem):
+    """
+    Base Shape Item
+    """
+
+    def __init__(self, parent):
+        super(BaseRectItem, self).__init__(parent)
+        self._antialiasing = False
+        self._color_bg = '#2F3234'
+        self._color_border = '#575B5D'
+        self.set_node_color()
+
+    def paint(self, painter, option, widget):
+        painter.setRenderHint(painter.Antialiasing, self._antialiasing)
+        super(BaseRectItem, self).paint(painter, option, widget)
+
+    def set_node_color(self, color='#2F3234', border='#575B5D'):
+        self._color_bg = color
+        self._color_border = border
+        self.setBrush(QtGui.QBrush(QtGui.QColor(self._color_bg)))
+        self.setPen(QtGui.QPen(QtGui.QColor(self._color_border), 1))
+
+
+class NodeTextBackground(BaseRectItem):
+
+    def __init__(self, parent):
+        super(NodeTextBackground, self).__init__(parent)
+
+    def mousePressEvent(self, event):
+        parent = self.parentItem()
+        if parent:
+            parent.setSelected(True)
+
+
+class NodeItem(BaseRectItem):
     """
     Base Node Item
     """
 
-    def __init__(self, name='Untitled_Node', parent=None):
+    def __init__(self, name='Node', icon=None, parent=None):
         super(NodeItem, self).__init__(parent)
         self.setFlags(self.ItemIsSelectable | self.ItemIsMovable)
-        self.setPen(QtGui.QPen(QtGui.QColor('#186187'), 1))
-        self.name = name
-        self._width = 50.0
-        self._height = 100.0
-        self._colorBg = '#0B0E13'
-        self._textColor = '#C4E8EB'
-        self._label = QtGui.QGraphicsTextItem(self.name, self)
+        # node
+        self._text_bg_item = NodeTextBackground(self)
+        self._text_item = QtGui.QGraphicsTextItem(name, self._text_bg_item)
+        self._color_text = '#6b7781'
+        self._color_text_bg = '#28333b'
+        self._width = 150
+        self._height = 100
 
-        # inputs and outputs of node:
+        # ports in/out
         self._inputs = []
         self._inputsTexts = []
         self._outputs = []
         self._outputsTexts = []
 
-        # Create corner for resize:
+        # node sizer
         self._sizer = NodeSizerItem(self)
-        self._sizer.posChangeCallbacks.append(self.setSize)
+        self._sizer.posChangeCallbacks.append(self.set_node_size)
         self._sizer.setFlag(self._sizer.ItemIsSelectable, True)
         self._sizer.setPos(self._width, self._height)
         self.setToolTip(
-            'Resize: {}\n(Double Click to Reset)'.format(self.name))
+            'Resize: {}\n(Double Click to Reset)'.format(self.node_name()))
 
-        self.setBackgroundColor(self._colorBg)
-        self.setTextColor(self._textColor)
-        self.setResizable(True)
+        # initialize setup
+        self.set_text_color()
+        self.set_resizable(True)
 
     def __str__(self):
-        return 'NodeItem(name=\'{}\')'.format(self.name)
-
-    def mouseMoveEvent(self, event):
-        super(NodeItem, self).mouseMoveEvent(event)
-    #     self.setSelected(False)
-    #
-    def mousePressEvent(self, event):
-        super(NodeItem, self).mousePressEvent(event)
-
-    def mouseReleaseEvent(self, event):
-        super(NodeItem, self).mouseReleaseEvent(event)
-        self.setBackgroundColor(self._colorBg)
+        return 'NodeItem(name=\'{}\')'.format(self.node_name())
 
     def paint(self, painter, option, widget):
-        texts_items = [self._label]
-        texts_items += self._outputsTexts
-        texts_items += self._inputsTexts
-
-        if not self.isSelected():
-            for text in texts_items:
-                text.setDefaultTextColor(QtGui.QColor(self._textColor))
+        if self.isSelected():
+            self._text_bg_item.set_node_color('#070b10', '#070b10')
+            rect = self.rect()
+            painter.setRenderHint(painter.Antialiasing, self._antialiasing)
+            painter.setBrush(QtGui.QColor('#674303'))
+            painter.setPen(QtGui.QPen(QtGui.QColor('#ffb72c'), 1))
+            painter.drawRect(rect.x(), rect.y(), rect.width(), rect.height())
+            text_color = QtGui.QColor('#ffb72c')
+            self._text_item.setDefaultTextColor(QtGui.QColor('#C58828'))
+        else:
             super(NodeItem, self).paint(painter, option, widget)
-            return
+            self._text_bg_item.set_node_color(
+                self._color_text_bg, self._color_text_bg)
+            text_color = QtGui.QColor(self._color_text)
+            self._text_item.setDefaultTextColor(text_color)
 
+        texts_items = self._inputsTexts + self._outputsTexts
         for text in texts_items:
-            text.setDefaultTextColor(QtGui.QColor('#ffb72c'))
+            text.setDefaultTextColor(text_color)
 
-        rect = self.rect()
-        x1, y1, w, h = rect.x(), rect.y(), rect.width(), rect.height()
-        painter.setBrush(QtGui.QColor('#674303'))
-        painter.setPen(QtGui.QPen(QtGui.QColor('#ffb72c'), 1))
-        painter.drawRect(x1, y1, w, h)
+    # def mouseMoveEvent(self, event):
+    #     super(NodeItem, self).mouseMoveEvent(event)
 
-    def _calcSize(self):
-        inWidth, outWidth = 0, 0
-        portHeight = 50
+    # def mousePressEvent(self, event):
+    #     super(NodeItem, self).mousePressEvent(event)
+
+    # def mouseReleaseEvent(self, event):
+    #     super(NodeItem, self).mouseReleaseEvent(event)
+
+    def _calc_size(self):
+        width = self._text_item.boundingRect().width() * 2
         if self._inputs:
-            for text in self._inputsTexts:
-                if text.boundingRect().width() > inWidth:
-                    inWidth = text.boundingRect().width()
-            inWidth += (self._inputs[0].boundingRect().width() * 2)
-            portHeight = self._inputs[0].boundingRect().height()
+            pWidths = [(p.boundingRect().width() * 2) for p in self._inputs]
+            width += max(pWidths)
+            width += pWidths[0]
         if self._outputs:
-            for text in self._outputsTexts:
-                if text.boundingRect().width() > outWidth:
-                    outWidth = text.boundingRect().width()
-            outWidth += (self._outputs[0].boundingRect().width() * 2)
-            portHeight = self._outputs[0].boundingRect().height()
-
-        width = (inWidth + outWidth) + (self._label.boundingRect().width()/2)
-        height = portHeight * (max(len(self._inputs), len(self._outputs)) + 4)
+            pWidths = [(p.boundingRect().width() * 2) for p in self._outputs]
+            width += max(pWidths)
+            width += pWidths[0]
+        pCount = max([len(self._inputs), len(self._outputs)]) + 1
+        height = (PortItem().boundingRect().height() * 2) * pCount
         return width, height
 
-    def _addPort(self, name, type, connectionLimit):
-        port = PortItem(self, name, type, connectionLimit)
-        text = QtGui.QGraphicsTextItem(port.name, self)
-        text.setDefaultTextColor(QtGui.QColor('#5ED79F'))
+    def _add_port(self, name, type, limit):
+        port = PortItem(self, name, type, limit)
+        text = QtGui.QGraphicsTextItem(port._name, self)
+        text.setDefaultTextColor(QtGui.QColor(self._color_text))
         font = text.font()
         font.setPointSize(8)
         text.setFont(font)
@@ -350,132 +383,178 @@ class NodeItem(QtGui.QGraphicsRectItem):
         elif type == 'out':
             self._outputs.append(port)
             self._outputsTexts.append(text)
-        self.adjustSize()
+        self.reset_size()
 
-    def addInputPort(self, label='input', connectionLimit=-1):
-        self._addPort(label, 'in', connectionLimit)
+    def node_name(self):
+        """
+        Get the name of the node.
+        Returns:
+            str: node name.
+        """
+        return self._text_item.toPlainText()
 
-    def addOutputPort(self, label='output', connectionLimit=-1):
-        self._addPort(label, 'out', connectionLimit)
+    def set_node_name(self, name='node'):
+        """
+        Set the node name.
+        Args:
+            name (str): name of the node.
+        """
+        self._text_item.setPlainText(name)
 
-    def adjustSize(self):
-        self._width, self._height = self._calcSize()
-        self._sizer.setPos(self._width, self._height)
-        self.setSize(self._width, self._height)
+    def set_node_icon(self, icon):
+        """
+        Sets the icon for the current node.
+        Args:
+            icon (str): path to the icon image.
+        """
+        raise NotImplementedError
 
-    def setResizable(self, mode=True):
+
+    def set_text_color(self, color='#C4E8EB'):
+        """
+        Set the color of the node text.
+        Args:
+            color (str): color in HEX format.
+        """
+        self._color_text = color
+        self._text_item.setDefaultTextColor(QtGui.QColor(self._color_text))
+
+    def set_resizable(self, mode=True):
+        """
+        Allow the node to be resizeable.
+        Args:
+            mode (bool): true if the node can be resized.
+        """
         self._sizer.setVisible(mode)
 
-    def setSize(self, w, h):
+    def reset_size(self):
         """
-        Resize block function.
+        Reset the node size to its initial width & height.
+        """
+        self._width, self._height = self._calc_size()
+        self._sizer.setPos(self._width, self._height)
+        self.set_node_size(self._width, self._height)
 
+    def add_input_port(self, label='port', limit=-1):
+        """
+        Adds an input port to the node.
         Args:
-            w (float): width of the circle.
-            h (float): height of the circle.
+            label (str): name to display next to the port
+            limit (int): the amount of connections a port can have.
         """
-        labelRect = self._label.boundingRect()
-        inPortWH = (0, 0)
-        outPortWH = (0, 0)
-        if self._inputsTexts:
-            pRect = self._inputsTexts[0].boundingRect()
-            inPortWH = (pRect.width(), pRect.height())
-        if self._outputsTexts:
-            pRect = self._outputsTexts[0].boundingRect()
-            outPortWH = (pRect.width(), pRect.height())
+        self._add_port(label, 'in', limit)
 
-        # limit node size:
-        if h < self._height:
-            h = self._height
-        if w < self._width:
-            w = self._width
-        self.setRect(0.0, 0.0, w, h)
+    def add_output_port(self, label='port', limit=-1):
+        """
+        Adds an output port to the node.
+        Args:
+            label (str): name to display next to the port
+            limit (int): the amount of connections a port can have.
+        """
+        self._add_port(label, 'out', limit)
 
-        # center label:
-        rect = self._label.boundingRect()
-        lw, lh = rect.width(), rect.height()
-        lx = (w - lw) / 2
-        ly = lh * -1
-        self._label.setPos(lx, ly)
+    def set_node_size(self, width, height):
+        """
+        Sets the node size with the given width x height.
+        Args:
+            width (float): width of the node.
+            height (float): height of the node.
+        """
+        # limit size:
+        height = self._height if height < self._height else height
+        width = self._width if width < self._width else width
+        self.setRect(0.0, 0.0, width, height)
+
+        # update label and background position:
+        t_rect = self._text_item.boundingRect()
+        tw, th = t_rect.width(), t_rect.height()
+        ty = (th + 1) * -1
+        self._text_bg_item.setRect(0, 0, width, th)
+        self._text_bg_item.setPos(0, ty)
+        self._text_item.setPos(2, 0)
 
         # update port positions:
-        padding = (7.5, 4)
         if len(self._inputs) == 1:
-            self._inputs[0].setPos(padding[0], h / 2)
-        elif len(self._inputs) > 1:
-            y = 5
-            dy = (h - 15) / (len(self._inputs) - 1)
-            for inp in self._inputs:
-                if inp == self._inputs[0]:
-                    inp.setPos(padding[0], y + (inPortWH[1] / 2))
-                elif inp == self._inputs[-1]:
-                    inp.setPos(padding[0], y - (inPortWH[1] / 2))
+            padding_w = self._inputs[0].boundingRect().width()
+            self._inputs[0].setPos(padding_w, height / 2)
+        elif self._inputs:
+            padding_w = self._inputs[0].boundingRect().width()
+            padding_h = self._inputs[0].boundingRect().height()
+            y_chunk = height / (len(self._inputs) - 1)
+            y = 0
+            for port in self._inputs:
+                if port == self._inputs[0]:
+                    port.setPos(padding_w, padding_h)
+                elif port == self._inputs[-1]:
+                    port.setPos(padding_w, height - padding_h)
                 else:
-                    inp.setPos(padding[0], y)
-                y += dy
+                    port.setPos(padding_w, y)
+                y += y_chunk
+
         if len(self._outputs) == 1:
-            self._outputs[0].setPos(w-padding[0], h / 2)
-        elif len(self._outputs) > 1:
-            y = 5
-            dy = (h - 10) / (len(self._outputs) - 1)
-            for outp in self._outputs:
-                if outp == self._outputs[0]:
-                    outp.setPos(w-padding[0], y + (outPortWH[1] / 2))
-                elif outp == self._outputs[-1]:
-                    outp.setPos(w-padding[0], y - (outPortWH[1] / 2))
+            padding_w = self._outputs[0].boundingRect().width()
+            self._outputs[0].setPos(padding_w, height / 2)
+        elif self._outputs:
+            padding_w = self._outputs[0].boundingRect().width()
+            padding_h = self._outputs[0].boundingRect().height()
+            y_chunk = height / (len(self._outputs) - 1)
+            y = 0
+            for port in self._outputs:
+                if port == self._outputs[0]:
+                    port.setPos(width - padding_w, padding_h)
+                elif port == self._outputs[-1]:
+                    port.setPos(width - padding_w, height - padding_h)
                 else:
-                    outp.setPos(w-padding[0], y)
-                y += dy
+                    port.setPos(width - padding_w, y)
+                y += y_chunk
 
         # update text position
-        for idx, txt in enumerate(self._inputsTexts):
-            pRect = self._inputs[idx].boundingRect()
-            pw, ph = pRect.width(), pRect.height()
-            tHeight = txt.boundingRect().height()
-            txt.setPos(self._inputs[idx].x()+(pw/2), self._inputs[idx].y()-(tHeight/2))
-        for idx, txt in enumerate(self._outputsTexts):
-            pRect = self._outputs[idx].boundingRect()
-            pw, ph = pRect.width(), pRect.height()
-            tWidth = txt.boundingRect().width()
-            tHeight = txt.boundingRect().height()
-            txt.setPos((self._outputs[idx].x()-tWidth)-(pw/2), self._outputs[idx].y()-(tHeight/2))
-        return w, h
-
-    def setBackgroundColor(self, color):
-        self._colorBg = color
-        self.setBrush(QtGui.QBrush(QtGui.QColor(self._colorBg)))
-
-    def setTextColor(self, color):
-        self._textColor = color
-        self._label.setDefaultTextColor(QtGui.QColor(self._textColor))
+        for idx, text in enumerate(self._inputsTexts):
+            p_rect = self._inputs[idx].boundingRect()
+            pw, ph = p_rect.width(), p_rect.height()
+            txt_height = text.boundingRect().height()
+            text.setPos(
+                self._inputs[idx].x() + (pw / 2),
+                self._inputs[idx].y() - (txt_height / 2)
+            )
+        for idx, text in enumerate(self._outputsTexts):
+            p_rect = self._outputs[idx].boundingRect()
+            pw, ph = p_rect.width(), p_rect.height()
+            txt_width = text.boundingRect().width()
+            txt_height = text.boundingRect().height()
+            text.setPos(
+                (self._outputs[idx].x() - txt_width) - (pw / 2),
+                self._outputs[idx].y() - (txt_height / 2)
+            )
+        return width, height
 
 
 class NodeScene(QtGui.QGraphicsScene):
 
-    def __init__(self, parent=None, bgColor='#181818'):
+    def __init__(self, parent=None, bg_color='#181818'):
         super(NodeScene, self).__init__(parent)
-        self.setBackgroundColor(bgColor)
-
-    def getNodeViewer(self):
-        if self.views():
-            return self.views()[0]
-        return None
+        self.set_background_color(bg_color)
 
     def mouseMoveEvent(self, event):
-        view = self.getNodeViewer()
+        view = self.get_node_viewer()
         if view:
             view.sceneMouseMoveEvent(event)
         super(NodeScene, self).mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        view = self.getNodeViewer()
+        view = self.get_node_viewer()
         if view:
             view.sceneMouseReleaseEvent(event)
         super(NodeScene, self).mouseReleaseEvent(event)
 
-    def setBackgroundColor(self, bgColor='#181818'):
-        self._color = bgColor
-        self.setBackgroundBrush(QtGui.QBrush(QtGui.QColor(self._color)))
+    def get_node_viewer(self):
+        if self.views():
+            return self.views()[0]
+        return None
+
+    def set_background_color(self, bg_color='#181818'):
+        self._color_bg = bg_color
+        self.setBackgroundBrush(QtGui.QBrush(QtGui.QColor(self._color_bg)))
 
 
 class NodeViewer(QtGui.QGraphicsView):
@@ -514,7 +593,7 @@ class NodeViewer(QtGui.QGraphicsView):
             # print self._startPort.getConnectedPorts()
 
             if len(self._preExistingPipes) == 1:
-                if (port.portType == 'out') and (self._extendConnection):
+                if (port._portType == 'out') and (self._extendConnection):
                     return
                 self._preExistingPipes[0].setDottedLine(True)
 
@@ -525,7 +604,7 @@ class NodeViewer(QtGui.QGraphicsView):
     def validateToPort(self, port):
         connectionChecks = [
             (port and port == self._startPort),
-            (port and port.portType == self._startPort.portType),
+            (port and port._portType == self._startPort._portType),
             (port and port.parentItem() == self._startPort.parentItem()),
             (port == None)]
         if True in connectionChecks:
@@ -554,11 +633,11 @@ class NodeViewer(QtGui.QGraphicsView):
             if len(self._preExistingPipes) == 1:
                 self._preExistingPipes[0].setDottedLine(False)
 
-            if (toPort.connectionLimit != -1):
-                while len(toPort.getConnectedPorts()) >= toPort.connectionLimit:
+            if (toPort._limit != -1):
+                while len(toPort.getConnectedPorts()) >= toPort._limit:
                     toPort.getConnectedPipes()[-1].delete()
 
-            if self._startPort.portType == 'in':
+            if self._startPort._portType == 'in':
                 if len(self._preExistingPipes) == 1:
                     if toPort in self._startPort.getConnectedPorts():
                         self._startedConnection.deleteConnection()
@@ -573,7 +652,7 @@ class NodeViewer(QtGui.QGraphicsView):
                     self._startedConnection.setEndPos(toPort.scenePos())
 
 
-            elif self._startPort.portType == 'out':
+            elif self._startPort._portType == 'out':
                 if len(self._preExistingPipes) == 1:
                     if toPort in self._startPort.getConnectedPorts():
                         self._startedConnection.deleteConnection()
