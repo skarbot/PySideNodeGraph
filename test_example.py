@@ -12,7 +12,7 @@ class TestNode(NodeItem):
     def __init__(self, name='Node', parent=None):
         super(TestNode, self).__init__(name, parent)
         self.add_input_port(label='input 1')
-        self.add_input_port(label='input 2 (limit: 4)', limit=4)
+        self.add_input_port(label='input 2')
         self.add_input_port(label='input 3')
         self.add_input_port(label='input 4')
 

@@ -3,89 +3,140 @@ from PySide import QtGui, QtCore
 
 
 class PipeItem(QtGui.QGraphicsPathItem):
+    """
+    Base pipe item.
+    """
 
-    def __init__(self, color='#C28D34', dottedColor='#4A596C'):
+    def __init__(self, color='#C28D34', dotted_color='#6b3c6a'):
         super(PipeItem, self).__init__(None)
         self.setFlag(self.ItemIsSelectable, False)
+        self._dotted = False
         self._color = color
-        self._dottedColor = dottedColor
-        self._inPort = None
-        self._outPort = None
-        self.setDottedLine(False)
+        self._color_dotted = dotted_color
+        self._in_port = None
+        self._out_port = None
+        self.set_dotted(False)
 
     def __str__(self):
-        return 'PipeItem(color={}, dottedColor={})'.format(self._color, self._colorGhost)
+        class_name = self.__class__.__name__
+        return '{}()'.format(class_name)
 
-    def setColor(self, color):
+    def set_pipe_color(self, color):
+        """
+        Sets the color of the pipe.
+        Args:
+            color (str): color of the pipe in HEX format. 
+        """
         self._color = color
-        self.setDottedLine()
+        self.set_dotted(False)
 
-    def setDottedLine(self, mode=False):
-        penType = {
-            True: QtCore.Qt.PenStyle.DashDotDotLine,
-            False: QtCore.Qt.PenStyle.SolidLine}
-        penColor = {
-            True: self._dottedColor,
-            False: self._color}
-        penSize = {True: 1, False: 2}
-        pen = QtGui.QPen(QtGui.QColor(penColor[mode]), penSize[mode])
-        pen.setStyle(penType[mode])
+    def set_dotted(self, mode=False):
+        """
+        Sets the style of the pipe to dotted mode.
+        Args:
+            mode (bool): true if 
+        """
+        self._dotted = mode
+        if self._dotted:
+            pen = QtGui.QPen(QtGui.QColor(self._color_dotted), 1)
+            pen.setStyle(QtCore.Qt.PenStyle.DashDotDotLine)
+        else:
+            pen = QtGui.QPen(QtGui.QColor(self._color), 2)
+            pen.setStyle(QtCore.Qt.PenStyle.SolidLine)
         self.setPen(pen)
 
-    def setInPort(self, port):
-        self._inPort = port
+    def set_in_port(self, port):
+        """
+        Set input for the pipe.        
+        Args:
+            port (PortItem): the connected input port.
+        """
+        self._in_port = port
 
-    def setOutPort(self, port):
-        self._outPort = port
+    def set_out_port(self, port):
+        """
+        Set output for the pipe.        
+        Args:
+            port (PortItem): the connected output port.
+        """
+        self._out_port = port
 
-    def getInPort(self):
-        return self._inPort
+    def get_in_port(self):
+        """
+        Get the connected input port.
+        Returns:
+            PortItem: the connected port.
+        """
+        return self._in_port
 
-    def getOutPort(self):
-        return self._outPort
+    def get_out_port(self):
+        """
+        Get the connected output port.
+        Returns:
+            PortItem: the connected port.
+        """
+        return self._out_port
+
+    def dotted(self):
+        """
+        Mode of the pipe if it is dotted.
+        Returns:
+            bool: true if dotted.
+        """
+        return self._dotted
 
     def delete(self):
-        if self._inPort:
-            self._inPort._connectedPipes.remove(self)
-        if self._outPort:
-            self._outPort._connectedPipes.remove(self)
-        scene = self.scene()
-        if scene:
-            scene.removeItem(self)
+        """
+        Remove the pipe from the current scene and 
+        detach from the connected ports.
+        """
+        if self._in_port:
+            self._in_port._pipe = None
+        if self._out_port:
+            self._out_port._pipe = None
+        if self.scene():
+            self.scene().removeItem(self)
 
 
 class PipeConnection(object):
+    """
+    Pipe connection object that will create the connection pipe 
+    to the targeted node ports.
+    """
 
-    def __init__(self, startPort=None, endPort=None, scene=None):
+    def __init__(self, from_port=None, to_port=None, scene=None):
         self._pipe = PipeItem()
-        self._pipePortSetter = {
-            'in':self._pipe.setInPort, 'out':self._pipe.setOutPort}
-        self.fromPort = startPort
-        self.toPort = endPort
+        self._from_port = from_port
+        self._to_port = to_port
         self._pos1 = None
         self._pos2 = None
-        if self.fromPort:
-            self._pos1 = self.fromPort.scenePos()
-            self.fromPort.posCallbacks.append(self.setStartPos)
-        if self.toPort:
-            self._pos2 = self.toPort.scenePos()
+        if self._from_port:
+            self._pos1 = self._from_port.scenePos()
+            self._from_port.pos_callbacks.append(self.set_start_pos)
+        if self._to_port:
+            self._pos2 = self._to_port.scenePos()
         scene.addItem(self._pipe)
 
-    def makePath(self, pos1, pos2):
+    def __str__(self):
+        return '{}(from_port={}, to_port={})'.format(
+            self.__class__.__name__, str(self._from_port), str(self._to_port)
+        )
+
+    def _make_path(self, pos1, pos2):
         line = QtCore.QLineF(pos1, pos2)
         path = QtGui.QPainterPath()
         path.moveTo(line.x1(), line.y1())
         cp1_offset, cp2_offset = pos1.x(), pos2.x()
-        parentRect = self.fromPort.parentItem().boundingRect()
+        rect = self._from_port.parentItem().boundingRect()
         tangent = cp1_offset - cp2_offset
         if tangent < 0:
             tangent *= -1
-        if tangent > parentRect.width():
-            tangent = parentRect.width()
-        if self.fromPort._portType == 'in':
+        if tangent > rect.width():
+            tangent = rect.width()
+        if self._from_port.type() == 'in':
             cp1_offset -= tangent
             cp2_offset += tangent
-        elif self.fromPort._portType == 'out':
+        elif self._from_port.type() == 'out':
             cp1_offset += tangent
             cp2_offset -= tangent
         cp1 = QtCore.QPointF(cp1_offset, pos1.y())
@@ -93,120 +144,151 @@ class PipeConnection(object):
         path.cubicTo(cp1, cp2, pos2)
         return path
 
-    def setStartPos(self, pos):
+    def set_start_pos(self, pos):
         """
-        set start point for the path
-
+        Set start point for the path.
         Args:
-            pos:
-
+            pos (QtCore.QPointF): start position for the pipe.  
         """
-        '''set start point for the path'''
         self._pos1 = pos
-        path = self.makePath(self._pos1, self._pos2)
+        path = self._make_path(self._pos1, self._pos2)
         self._pipe.setPath(path)
 
-    def setEndPos(self, pos):
+    def set_end_pos(self, pos):
         """
-        set end point for the path
-
+        Set end point for the path.
         Args:
-            pos:
-
+            pos (QtCore.QPointF): end position for the pipe.
         """
         self._pos2 = pos
-        path = self.makePath(self._pos1, self._pos2)
+        path = self._make_path(self._pos1, self._pos2)
         self._pipe.setPath(path)
 
-    def setFromPort(self, fromPort):
-        self.fromPort = fromPort
-        if self.fromPort:
-            self.pos1 = fromPort.scenePos()
-            self.fromPort.posCallbacks.append(self.setStartPos)
+    def set_from_port(self, port):
+        self._from_port = port
+        if self._from_port:
+            self._pos1 = port.scenePos()
+            self._from_port.pos_callbacks.append(self.set_start_pos)
 
-    def setToPort(self, toPort):
-        self.toPort = toPort
-        if self.toPort:
-            self.pos2 = self.toPort.scenePos()
-            self.toPort.posCallbacks.append(self.setEndPos)
-            self.toPort._connectedPipes.append(self._pipe)
-            self._pipePortSetter[self.toPort._portType](self.fromPort)
+    def set_to_port(self, port):
+        self._to_port = port
+        if self._to_port:
+            self._pos2 = self._to_port.scenePos()
+            self._to_port.pos_callbacks.append(self.set_end_pos)
+            self._to_port._connected_pipe = self._pipe
+            self._from_port._connected_pipe = self._pipe
+            port_setter = {
+                'out': self._pipe.set_in_port,
+                'in': self._pipe.set_out_port
+            }
+            port_setter[self._to_port.type()](self._from_port)
+            port_setter[self._from_port.type()](self._to_port)
+            # assign pipe to the ports
+            self._from_port._pipe = self._pipe
+            self._to_port._pipe = self._pipe
 
-            self.fromPort._connectedPipes.append(self._pipe)
-            self._pipePortSetter[self.fromPort._portType](self.toPort)
-
-    def deleteConnection(self):
+    def delete_connection(self):
         self._pipe.delete()
-        if self.fromPort:
-            self.fromPort.posCallbacks.remove(self.setStartPos)
+        if self._from_port:
+            self._from_port.pos_callbacks.remove(self.set_start_pos)
 
 
 class PortItem(QtGui.QGraphicsEllipseItem):
     """
-    PortItem to a NodeItem
+    Base Port item.
     """
 
-    def __init__(self, parent=None, name='port', portType='out', limit=-1):
-        super(PortItem, self).__init__(
-            QtCore.QRectF(-4.0, -4.0, 8.0, 8.0), parent)
+    def __init__(self, parent=None, name='port', port_type='out'):
+        rect = QtCore.QRectF(-4.0, -4.0, 8.0, 8.0)
+        super(PortItem, self).__init__(rect, parent)
         self.setAcceptHoverEvents(True)
         self.setFlag(self.ItemSendsScenePositionChanges, True)
-        self._connectedPipes = []
-        self._colorDefault = ('#435967', '#1DCA97')
-        self._colorClicked = ('#6A3C56', '#AF8BA6')
-        self.setBrush(QtGui.QBrush(QtGui.QColor(self._colorDefault[0])))
-        self.setPen(QtGui.QPen(QtGui.QColor(self._colorDefault[1]), 1))
+        self._pipe = None
+        self._color_default = ('#435967', '#1DCA97')
+        self._color_clicked = ('#6A3C56', '#AF8BA6')
+        self.setBrush(QtGui.QBrush(QtGui.QColor(self._color_default[0])))
+        self.setPen(QtGui.QPen(QtGui.QColor(self._color_default[1]), 1))
         self._name = name
-        self._portType = portType
-        self._limit = limit
-        self.posCallbacks = []
+        self._port_type = port_type
+        self.pos_callbacks = []
 
     def __str__(self):
-        kwargs = {
-            'name': self._name,
-            'portType': self._portType,
-            'limit': self._limit
-        }
-        return 'PortItem(\'{name}\', \'{portType}\', \'{limit}\')'.format(**kwargs)
+        class_name = self.__class__.__name__
+        return '{}(\'{}\', \'{}\')'.format(
+            class_name, self._name, self._port_type
+        )
 
     def itemChange(self, change, value):
         if change == self.ItemScenePositionHasChanged:
-            for cb in self.posCallbacks:
+            for cb in self.pos_callbacks:
                 cb(value)
             return value
         return super(PortItem, self).itemChange(change, value)
 
     def hoverEnterEvent(self, event):
-        self.setBrush(QtGui.QBrush(QtGui.QColor(self._colorDefault[1])))
-        self.setPen(QtGui.QPen(QtGui.QColor(self._colorDefault[0]), 2))
+        self.setBrush(QtGui.QBrush(QtGui.QColor(self._color_default[1])))
+        self.setPen(QtGui.QPen(QtGui.QColor(self._color_default[0]), 2))
 
     def hoverLeaveEvent(self, event):
-        self.setBrush(QtGui.QBrush(QtGui.QColor(self._colorDefault[0])))
-        self.setPen(QtGui.QPen(QtGui.QColor(self._colorDefault[1]), 1))
+        self.setBrush(QtGui.QBrush(QtGui.QColor(self._color_default[0])))
+        self.setPen(QtGui.QPen(QtGui.QColor(self._color_default[1]), 1))
 
     def mousePressEvent(self, event):
         viewer = self.scene().get_node_viewer()
-        viewer.startConnection(self)
-        self.setBrush(QtGui.QBrush(QtGui.QColor(self._colorClicked[0])))
-        self.setPen(QtGui.QPen(QtGui.QColor(self._colorClicked[1]), 2))
+        viewer.start_connection(self)
+        self.setBrush(QtGui.QBrush(QtGui.QColor(self._color_clicked[0])))
+        self.setPen(QtGui.QPen(QtGui.QColor(self._color_clicked[1]), 2))
         # super(PortItem, self).mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
-        self.setBrush(QtGui.QBrush(QtGui.QColor(self._colorDefault[0])))
-        self.setPen(QtGui.QPen(QtGui.QColor(self._colorDefault[1]), 2))
+        self.setBrush(QtGui.QBrush(QtGui.QColor(self._color_default[0])))
+        self.setPen(QtGui.QPen(QtGui.QColor(self._color_default[1]), 2))
         # super(PortItem, self).mouseReleaseEvent(event)
 
-    def getConnectedPipes(self):
-        return self._connectedPipes
+    def node(self):
+        """
+        Get the node of the current port.
+        Returns:
+            NodeItem: node that's connected to the port.
+        """
+        return self.parentItem()
 
-    def getConnectedPorts(self):
-        ports = []
-        for pipe in self._connectedPipes:
-            if self._portType == 'in':
-                ports.append(pipe.getOutPort())
-            elif self._portType == 'out':
-                ports.append(pipe.getInPort())
-        return ports
+    def name(self):
+        """
+        Get the name of the current port.
+        Returns:
+            str: port name.
+        """
+        return self._name
+
+    def type(self):
+        """
+        Query the port type whether it's a in or out. 
+        Returns:
+            str: in or out.
+        """
+        return self._port_type
+
+    def connected_pipe(self):
+        """
+        Gets the connected pipe object.
+        Returns:
+            PipeItem: the object of the connected pipe.
+        """
+        return self._pipe
+
+    def connected_port(self):
+        """
+        Gets the connected port object.
+        Returns:
+            PortItem: the object of the connected port.
+        """
+        if self._pipe:
+            if self._port_type is 'in':
+                return self._pipe.get_out_port()
+            elif self._port_type is 'out':
+                return self._pipe.get_in_port()
+        return None
 
 
 class NodeSizerItem(QtGui.QGraphicsEllipseItem):
@@ -257,21 +339,29 @@ class NodeSizerItem(QtGui.QGraphicsEllipseItem):
 
 class BaseRectItem(QtGui.QGraphicsRectItem):
     """
-    Base Shape Item
+    Base shape item.
     """
 
     def __init__(self, parent):
         super(BaseRectItem, self).__init__(parent)
         self._antialiasing = False
         self._color_bg = '#2F3234'
-        self._color_border = '#575B5D'
+        self._color_border = '#3c4042'
         self.set_node_color()
+
+
 
     def paint(self, painter, option, widget):
         painter.setRenderHint(painter.Antialiasing, self._antialiasing)
         super(BaseRectItem, self).paint(painter, option, widget)
 
-    def set_node_color(self, color='#2F3234', border='#575B5D'):
+    def set_node_color(self, color='#2F3234', border='#3c4042'):
+        """
+        Set the background & border color of the node.
+        Args:
+            color (str): background color in HEX format.
+            border (str): border color in HEX format.
+        """
         self._color_bg = color
         self._color_border = border
         self.setBrush(QtGui.QBrush(QtGui.QColor(self._color_bg)))
@@ -279,6 +369,9 @@ class BaseRectItem(QtGui.QGraphicsRectItem):
 
 
 class NodeTextBackground(BaseRectItem):
+    """
+    Base node label background shape item.
+    """
 
     def __init__(self, parent):
         super(NodeTextBackground, self).__init__(parent)
@@ -291,7 +384,7 @@ class NodeTextBackground(BaseRectItem):
 
 class NodeItem(BaseRectItem):
     """
-    Base Node Item
+    Base node item.
     """
 
     def __init__(self, name='Node', icon=None, parent=None):
@@ -301,7 +394,7 @@ class NodeItem(BaseRectItem):
         self._text_bg_item = NodeTextBackground(self)
         self._text_item = QtGui.QGraphicsTextItem(name, self._text_bg_item)
         self._color_text = '#6b7781'
-        self._color_text_bg = '#28333b'
+        self._color_text_bg = '#292c2f'
         self._width = 150
         self._height = 100
 
@@ -324,7 +417,8 @@ class NodeItem(BaseRectItem):
         self.set_resizable(True)
 
     def __str__(self):
-        return 'NodeItem(name=\'{}\')'.format(self.node_name())
+        class_name = self.__class__.__name__
+        return '{}(\'{}\')'.format(class_name, self.node_name())
 
     def paint(self, painter, option, widget):
         if self.isSelected():
@@ -332,7 +426,7 @@ class NodeItem(BaseRectItem):
             rect = self.rect()
             painter.setRenderHint(painter.Antialiasing, self._antialiasing)
             painter.setBrush(QtGui.QColor('#674303'))
-            painter.setPen(QtGui.QPen(QtGui.QColor('#ffb72c'), 1))
+            painter.setPen(QtGui.QPen(QtGui.QColor('#774e03'), 1))
             painter.drawRect(rect.x(), rect.y(), rect.width(), rect.height())
             text_color = QtGui.QColor('#ffb72c')
             self._text_item.setDefaultTextColor(QtGui.QColor('#C58828'))
@@ -370,9 +464,9 @@ class NodeItem(BaseRectItem):
         height = (PortItem().boundingRect().height() * 2) * pCount
         return width, height
 
-    def _add_port(self, name, type, limit):
-        port = PortItem(self, name, type, limit)
-        text = QtGui.QGraphicsTextItem(port._name, self)
+    def _add_port(self, name, type):
+        port = PortItem(self, name, type)
+        text = QtGui.QGraphicsTextItem(port.name(), self)
         text.setDefaultTextColor(QtGui.QColor(self._color_text))
         font = text.font()
         font.setPointSize(8)
@@ -409,7 +503,6 @@ class NodeItem(BaseRectItem):
         """
         raise NotImplementedError
 
-
     def set_text_color(self, color='#C4E8EB'):
         """
         Set the color of the node text.
@@ -435,23 +528,21 @@ class NodeItem(BaseRectItem):
         self._sizer.setPos(self._width, self._height)
         self.set_node_size(self._width, self._height)
 
-    def add_input_port(self, label='port', limit=-1):
+    def add_input_port(self, label='port'):
         """
         Adds an input port to the node.
         Args:
             label (str): name to display next to the port
-            limit (int): the amount of connections a port can have.
         """
-        self._add_port(label, 'in', limit)
+        self._add_port(label, 'in')
 
-    def add_output_port(self, label='port', limit=-1):
+    def add_output_port(self, label='port'):
         """
         Adds an output port to the node.
         Args:
             label (str): name to display next to the port
-            limit (int): the amount of connections a port can have.
         """
-        self._add_port(label, 'out', limit)
+        self._add_port(label, 'out')
 
     def set_node_size(self, width, height):
         """
@@ -531,9 +622,13 @@ class NodeItem(BaseRectItem):
 
 class NodeScene(QtGui.QGraphicsScene):
 
-    def __init__(self, parent=None, bg_color='#181818'):
+    def __init__(self, parent=None, bg_color='#212121'):
         super(NodeScene, self).__init__(parent)
         self.set_background_color(bg_color)
+
+    def __str__(self):
+        class_name = self.__class__.__name__
+        return '{}()'.format(class_name)
 
     def mouseMoveEvent(self, event):
         view = self.get_node_viewer()
@@ -552,7 +647,7 @@ class NodeScene(QtGui.QGraphicsScene):
             return self.views()[0]
         return None
 
-    def set_background_color(self, bg_color='#181818'):
+    def set_background_color(self, bg_color='#212121'):
         self._color_bg = bg_color
         self.setBackgroundBrush(QtGui.QBrush(QtGui.QColor(self._color_bg)))
 
@@ -560,136 +655,110 @@ class NodeScene(QtGui.QGraphicsScene):
 class NodeViewer(QtGui.QGraphicsView):
     def __init__(self, scene, parent=None):
         super(NodeViewer, self).__init__(scene, parent)
-        sceneArea = 3200.0
-        self.setSceneRect(-(sceneArea/2), -(sceneArea/2), sceneArea, sceneArea)
         self.setRenderHint(QtGui.QPainter.Antialiasing)
-        self._startPort = None
-        self._startedConnection = None
-        self._extendConnection = False
-        self._preExistingPipes = []
+        scene_area = 3200.0
+        self.setSceneRect(
+            -(scene_area / 2), -(scene_area / 2), scene_area, scene_area
+        )
+        self._start_port = None
+        self._connection_started = None
 
-    def dragEnterEvent(self, event):
-        if event.mimeData().hasFormat('component/name'):
-            event.accept()
+    def __str__(self):
+        class_name = self.__class__.__name__
+        return '{}()'.format(class_name)
 
-    def dragMoveEvent(self, event):
-        if event.mimeData().hasFormat('component/name'):
-            event.accept()
+    # def dragEnterEvent(self, event):
+    #     if event.mimeData().hasFormat('component/name'):
+    #         event.accept()
+    #
+    # def dragMoveEvent(self, event):
+    #     if event.mimeData().hasFormat('component/name'):
+    #         event.accept()
+    #
+    # def dropEvent(self, event):
+    #     if event.mimeData().hasFormat('component/name'):
+    #         name = str(event.mimeData().data('component/name'))
+    #         dropNode = NodeItem(name)
+    #         dropNode.setPos(self.mapToScene(event.pos()))
+    #         self.scene().addItem(dropNode)
 
-    def dropEvent(self, event):
-        if event.mimeData().hasFormat('component/name'):
-            name = str(event.mimeData().data('component/name'))
-            dropNode = NodeItem(name)
-            dropNode.setPos(self.mapToScene(event.pos()))
-            self.scene().addItem(dropNode)
+    def start_connection(self, port):
+        # start connection when the port is clicked.
+        if not port:
+            return
+        self._start_port = port
+        if self._start_port.connected_pipe():
+            # switch start point if pipe exists.
+            self._start_port = self._start_port.connected_port()
 
-    def startConnection(self, port):
-        if port:
-            self._startPort = port
-            self._preExistingPipes = self._startPort.getConnectedPipes()
-            self._startedConnection = PipeConnection(self._startPort, None, self.scene())
+        self._connection_started = PipeConnection(
+            self._start_port, None, self.scene()
+        )
 
-            # print self._startPort.name, len(self._preExistingPipes)
-            # print self._startPort.getConnectedPorts()
-
-            if len(self._preExistingPipes) == 1:
-                if (port._portType == 'out') and (self._extendConnection):
-                    return
-                self._preExistingPipes[0].setDottedLine(True)
-
-    def endConnection(self):
-        self._startedConnection = None
-        self._preExistingPipes = []
-
-    def validateToPort(self, port):
-        connectionChecks = [
-            (port and port == self._startPort),
-            (port and port._portType == self._startPort._portType),
-            (port and port.parentItem() == self._startPort.parentItem()),
-            (port == None)]
-        if True in connectionChecks:
-            return False
-        return True
+    def end_connection(self):
+        self._connection_started = None
 
     def sceneMouseReleaseEvent(self, event):
-        if self._startedConnection:
+        if self._connection_started:
             # find destination port
-            toPort = None
+            to_port = None
             for item in self.scene().items(event.scenePos()):
                 if isinstance(item, PortItem):
-                    toPort = item
+                    to_port = item
                     break
+            # validate port and connection
+            end_connection = False
+            connected_pipe = self._start_port.connected_pipe()
+            if not to_port:
+                if connected_pipe:
+                    connected_pipe.delete()
+                end_connection = True
+            elif to_port is self._start_port:
+                if connected_pipe:
+                    connected_pipe.set_dotted(False)
+                end_connection = True
+            elif to_port.type() is self._start_port.type():
+                end_connection = True
+            elif to_port.node() is self._start_port.node():
+                end_connection = True
 
-            if (len(self._preExistingPipes) == 1) and (toPort == None):
-                self._preExistingPipes[0].delete()
+            # do not remove connected pipe if to_port == from_port
+            if to_port and to_port.connected_pipe():
+                if to_port is not self._start_port:
+                    to_port.connected_pipe().delete()
 
-            if not self.validateToPort(toPort):
-                if len(self._preExistingPipes) == 1:
-                    self._preExistingPipes[0].setDottedLine(False)
-                self._startedConnection.deleteConnection()
-                self.endConnection()
+            if end_connection:
+                self._connection_started.delete_connection()
+                self.end_connection()
                 return
 
-            if len(self._preExistingPipes) == 1:
-                self._preExistingPipes[0].setDottedLine(False)
-
-            if (toPort._limit != -1):
-                while len(toPort.getConnectedPorts()) >= toPort._limit:
-                    toPort.getConnectedPipes()[-1].delete()
-
-            if self._startPort._portType == 'in':
-                if len(self._preExistingPipes) == 1:
-                    if toPort in self._startPort.getConnectedPorts():
-                        self._startedConnection.deleteConnection()
-                    else:
-                        self._preExistingPipes[0].delete()
-                        self._startedConnection.setToPort(toPort)
-                        self._startedConnection.setEndPos(toPort.scenePos())
-                    self.endConnection()
-                    return
-                else:
-                    self._startedConnection.setToPort(toPort)
-                    self._startedConnection.setEndPos(toPort.scenePos())
-
-
-            elif self._startPort._portType == 'out':
-                if len(self._preExistingPipes) == 1:
-                    if toPort in self._startPort.getConnectedPorts():
-                        self._startedConnection.deleteConnection()
-                    else:
-                        if not self._extendConnection:
-                            self._preExistingPipes[0].delete()
-                        self._startedConnection.setToPort(toPort)
-                        self._startedConnection.setEndPos(toPort.scenePos())
-                    self.endConnection()
-                    return
-                else:
-                    self._startedConnection.setToPort(toPort)
-                    self._startedConnection.setEndPos(toPort.scenePos())
-
-            self.endConnection()
+            # make the connection.
+            if connected_pipe:
+                connected_pipe.delete()
+            self._connection_started.set_to_port(to_port)
+            self._connection_started.set_end_pos(to_port.scenePos())
+            self.end_connection()
 
     def sceneMouseMoveEvent(self, event):
-        if self._startedConnection:
-            pos = event.scenePos()
-            self._startedConnection.setEndPos(pos)
+        if self._connection_started:
+            self._connection_started.set_end_pos(event.scenePos())
+            connected_pipe = self._start_port.connected_pipe()
+            if connected_pipe and not connected_pipe.dotted():
+                connected_pipe.set_dotted(True)
 
     def keyPressEvent(self, event):
         key = event.key()
         selection = self.scene().selectedItems()
-        if key == QtCore.Qt.Key_Shift:
-            self._extendConnection = True
-        elif key == QtCore.Qt.Key_Alt:
+        if key == QtCore.Qt.Key_Alt:
             self.setDragMode(self.DragMode.ScrollHandDrag)
         elif key == QtCore.Qt.Key_F:
-            if len(selection) == 1:
+            if len(selection) is 1:
                 self.centerOn(selection[0])
-        elif (key == QtCore.Qt.Key_Delete) or (key == QtCore.Qt.Key_Backspace):
+        elif key == QtCore.Qt.Key_Delete or key == QtCore.Qt.Key_Backspace:
             for item in selection:
                 self.scene().removeItem(item)
         super(NodeViewer, self).keyPressEvent(event)
 
     def keyReleaseEvent(self, event):
-        self._extendConnection = False
         self.setDragMode(self.DragMode.NoDrag)
         super(NodeViewer, self).keyReleaseEvent(event)
