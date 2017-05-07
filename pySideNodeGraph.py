@@ -7,9 +7,10 @@ class PipeItem(QtGui.QGraphicsPathItem):
     Base pipe item.
     """
 
-    def __init__(self, color='#C28D34', dotted_color='#4A596C'):
+    def __init__(self, color='#C28D34', dotted_color='#6b3c6a'):
         super(PipeItem, self).__init__(None)
         self.setFlag(self.ItemIsSelectable, False)
+        self._dotted = False
         self._color = color
         self._color_dotted = dotted_color
         self._in_port = None
@@ -17,9 +18,8 @@ class PipeItem(QtGui.QGraphicsPathItem):
         self.set_dotted(False)
 
     def __str__(self):
-        return 'PipeItem(color=\'{}\', dotted_color\'{}\')'.format(
-            self._color, self._color_dotted
-        )
+        class_name = self.__class__.__name__
+        return '{}()'.format(class_name)
 
     def set_pipe_color(self, color):
         """
@@ -36,7 +36,8 @@ class PipeItem(QtGui.QGraphicsPathItem):
         Args:
             mode (bool): true if 
         """
-        if mode:
+        self._dotted = mode
+        if self._dotted:
             pen = QtGui.QPen(QtGui.QColor(self._color_dotted), 1)
             pen.setStyle(QtCore.Qt.PenStyle.DashDotDotLine)
         else:
@@ -45,16 +46,44 @@ class PipeItem(QtGui.QGraphicsPathItem):
         self.setPen(pen)
 
     def set_in_port(self, port):
+        """
+        Set input for the pipe.        
+        Args:
+            port (PortItem): the connected input port.
+        """
         self._in_port = port
 
     def set_out_port(self, port):
+        """
+        Set output for the pipe.        
+        Args:
+            port (PortItem): the connected output port.
+        """
         self._out_port = port
 
     def get_in_port(self):
+        """
+        Get the connected input port.
+        Returns:
+            PortItem: the connected port.
+        """
         return self._in_port
 
     def get_out_port(self):
+        """
+        Get the connected output port.
+        Returns:
+            PortItem: the connected port.
+        """
         return self._out_port
+
+    def dotted(self):
+        """
+        Mode of the pipe if it is dotted.
+        Returns:
+            bool: true if dotted.
+        """
+        return self._dotted
 
     def delete(self):
         """
@@ -89,8 +118,8 @@ class PipeConnection(object):
         scene.addItem(self._pipe)
 
     def __str__(self):
-        return 'PipeConnection(from_port={}, to_port={})'.format(
-            str(self._from_port), str(self._to_port)
+        return '{}(from_port={}, to_port={})'.format(
+            self.__class__.__name__, str(self._from_port), str(self._to_port)
         )
 
     def _make_path(self, pos1, pos2):
@@ -184,7 +213,10 @@ class PortItem(QtGui.QGraphicsEllipseItem):
         self.pos_callbacks = []
 
     def __str__(self):
-        return 'PortItem(\'{}\', \'{}\')'.format(self._name, self._port_type)
+        class_name = self.__class__.__name__
+        return '{}(\'{}\', \'{}\')'.format(
+            class_name, self._name, self._port_type
+        )
 
     def itemChange(self, change, value):
         if change == self.ItemScenePositionHasChanged:
@@ -317,6 +349,8 @@ class BaseRectItem(QtGui.QGraphicsRectItem):
         self._color_border = '#3c4042'
         self.set_node_color()
 
+
+
     def paint(self, painter, option, widget):
         painter.setRenderHint(painter.Antialiasing, self._antialiasing)
         super(BaseRectItem, self).paint(painter, option, widget)
@@ -383,7 +417,8 @@ class NodeItem(BaseRectItem):
         self.set_resizable(True)
 
     def __str__(self):
-        return 'NodeItem(name=\'{}\')'.format(self.node_name())
+        class_name = self.__class__.__name__
+        return '{}(\'{}\')'.format(class_name, self.node_name())
 
     def paint(self, painter, option, widget):
         if self.isSelected():
@@ -591,6 +626,10 @@ class NodeScene(QtGui.QGraphicsScene):
         super(NodeScene, self).__init__(parent)
         self.set_background_color(bg_color)
 
+    def __str__(self):
+        class_name = self.__class__.__name__
+        return '{}()'.format(class_name)
+
     def mouseMoveEvent(self, event):
         view = self.get_node_viewer()
         if view:
@@ -623,7 +662,10 @@ class NodeViewer(QtGui.QGraphicsView):
         )
         self._start_port = None
         self._connection_started = None
-        self._preExistingPipes = []
+
+    def __str__(self):
+        class_name = self.__class__.__name__
+        return '{}()'.format(class_name)
 
     # def dragEnterEvent(self, event):
     #     if event.mimeData().hasFormat('component/name'):
@@ -648,7 +690,6 @@ class NodeViewer(QtGui.QGraphicsView):
         if self._start_port.connected_pipe():
             # switch start point if pipe exists.
             self._start_port = self._start_port.connected_port()
-            self._start_port.connected_pipe().set_dotted(True)
 
         self._connection_started = PipeConnection(
             self._start_port, None, self.scene()
@@ -701,6 +742,9 @@ class NodeViewer(QtGui.QGraphicsView):
     def sceneMouseMoveEvent(self, event):
         if self._connection_started:
             self._connection_started.set_end_pos(event.scenePos())
+            connected_pipe = self._start_port.connected_pipe()
+            if connected_pipe and not connected_pipe.dotted():
+                connected_pipe.set_dotted(True)
 
     def keyPressEvent(self, event):
         key = event.key()
