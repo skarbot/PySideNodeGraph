@@ -359,7 +359,7 @@ class BaseNode(BaseRectFrame):
 
     def __str__(self):
         class_name = self.__class__.__name__
-        return '{}(\'{}\')'.format(class_name, self.node_name())
+        return '{}(\'{}\')'.format(class_name, self.name())
 
     def paint(self, painter, option, widget):
         if self.isSelected():
@@ -420,46 +420,6 @@ class BaseNode(BaseRectFrame):
             self._outputsTexts.append(text)
         self.reset_size()
 
-    def node_name(self):
-        """
-        Get the name of the node.
-        Returns:
-            str: node name.
-        """
-        return self._text_item.toPlainText()
-
-    def set_node_name(self, name='node'):
-        """
-        Set the node name.
-        Args:
-            name (str): name of the node.
-        """
-        self._text_item.setPlainText(name)
-
-    def set_node_icon(self, icon):
-        """
-        Sets the icon for the current node.
-        Args:
-            icon (str): path to the icon image.
-        """
-        raise NotImplementedError
-
-    def set_text_color(self, color='#C4E8EB'):
-        """
-        Set the color of the node text.
-        Args:
-            color (str): color in HEX format.
-        """
-        self._color_text = color
-        self._text_item.setDefaultTextColor(QtGui.QColor(self._color_text))
-
-    def reset_size(self):
-        """
-        Reset the node size to its initial width & height.
-        """
-        self._width, self._height = self._calc_size()
-        self.set_node_size(self._width, self._height)
-
     def add_input_port(self, label='port'):
         """
         Adds an input port to the node.
@@ -476,7 +436,40 @@ class BaseNode(BaseRectFrame):
         """
         self._add_port(label, 'out')
 
-    def set_node_size(self, width, height):
+    def name(self):
+        """
+        Get the name of the node.
+        Returns:
+            str: node name.
+        """
+        return self._text_item.toPlainText()
+
+    def set_name(self, name='node'):
+        """
+        Set the node name.
+        Args:
+            name (str): name of the node.
+        """
+        self._text_item.setPlainText(name)
+
+    def set_icon(self, icon):
+        """
+        Sets the icon for the current node.
+        Args:
+            icon (str): path to the icon image.
+        """
+        raise NotImplementedError
+
+    def set_text_color(self, color='#C4E8EB'):
+        """
+        Set the color of the node text.
+        Args:
+            color (str): color in HEX format.
+        """
+        self._color_text = color
+        self._text_item.setDefaultTextColor(QtGui.QColor(self._color_text))
+
+    def set_size(self, width, height):
         """
         Sets the node size with the given width x height.
         Args:
@@ -550,6 +543,24 @@ class BaseNode(BaseRectFrame):
                 self._outputs[idx].y() - (txt_height / 2)
             )
         return width, height
+
+    def reset_size(self):
+        """
+        Reset the node size to its initial width & height.
+        """
+        self._width, self._height = self._calc_size()
+        self.set_size(self._width, self._height)
+
+    def delete(self):
+        """
+        Remove node from the node graph.
+        """
+        ports = self._inputs + self._outputs
+        for port in ports:
+            if port.connected_pipe():
+                port.connected_pipe().delete()
+        if self.scene():
+            self.scene().removeItem(self)
 
 
 class NodeScene(QtGui.QGraphicsScene):
@@ -692,7 +703,8 @@ class NodeViewer(QtGui.QGraphicsView):
                 self.centerOn(selection[0])
         elif key == QtCore.Qt.Key_Delete or key == QtCore.Qt.Key_Backspace:
             for item in selection:
-                self.scene().removeItem(item)
+                if isinstance(item, BaseNode):
+                    item.delete()
         super(NodeViewer, self).keyPressEvent(event)
 
     def keyReleaseEvent(self, event):
