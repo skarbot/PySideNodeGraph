@@ -2,13 +2,13 @@
 from PySide import QtGui, QtCore
 
 
-class PipeItem(QtGui.QGraphicsPathItem):
+class Pipe(QtGui.QGraphicsPathItem):
     """
     Base pipe item.
     """
 
     def __init__(self, color='#C28D34', dotted_color='#6b3c6a'):
-        super(PipeItem, self).__init__(None)
+        super(Pipe, self).__init__(None)
         self.setFlag(self.ItemIsSelectable, False)
         self._dotted = False
         self._color = color
@@ -49,7 +49,7 @@ class PipeItem(QtGui.QGraphicsPathItem):
         """
         Set input for the pipe.        
         Args:
-            port (PortItem): the connected input port.
+            port (Port): the connected input port.
         """
         self._in_port = port
 
@@ -57,7 +57,7 @@ class PipeItem(QtGui.QGraphicsPathItem):
         """
         Set output for the pipe.        
         Args:
-            port (PortItem): the connected output port.
+            port (Port): the connected output port.
         """
         self._out_port = port
 
@@ -65,7 +65,7 @@ class PipeItem(QtGui.QGraphicsPathItem):
         """
         Get the connected input port.
         Returns:
-            PortItem: the connected port.
+            Port: the connected port.
         """
         return self._in_port
 
@@ -73,7 +73,7 @@ class PipeItem(QtGui.QGraphicsPathItem):
         """
         Get the connected output port.
         Returns:
-            PortItem: the connected port.
+            Port: the connected port.
         """
         return self._out_port
 
@@ -98,14 +98,14 @@ class PipeItem(QtGui.QGraphicsPathItem):
             self.scene().removeItem(self)
 
 
-class PipeConnection(object):
+class PipeConnectionGenerator(object):
     """
     Pipe connection object that will create the connection pipe 
     to the targeted node ports.
     """
 
     def __init__(self, from_port=None, to_port=None, scene=None):
-        self._pipe = PipeItem()
+        self._pipe = Pipe()
         self._from_port = from_port
         self._to_port = to_port
         self._pos1 = None
@@ -193,14 +193,14 @@ class PipeConnection(object):
             self._from_port.pos_callbacks.remove(self.set_start_pos)
 
 
-class PortItem(QtGui.QGraphicsEllipseItem):
+class Port(QtGui.QGraphicsEllipseItem):
     """
-    Base Port item.
+    Base Port object.
     """
 
     def __init__(self, parent=None, name='port', port_type='out'):
         rect = QtCore.QRectF(-4.0, -4.0, 8.0, 8.0)
-        super(PortItem, self).__init__(rect, parent)
+        super(Port, self).__init__(rect, parent)
         self.setAcceptHoverEvents(True)
         self.setFlag(self.ItemSendsScenePositionChanges, True)
         self._pipe = None
@@ -223,7 +223,7 @@ class PortItem(QtGui.QGraphicsEllipseItem):
             for cb in self.pos_callbacks:
                 cb(value)
             return value
-        return super(PortItem, self).itemChange(change, value)
+        return super(Port, self).itemChange(change, value)
 
     def hoverEnterEvent(self, event):
         self.setBrush(QtGui.QBrush(QtGui.QColor(self._color_default[1])))
@@ -249,7 +249,7 @@ class PortItem(QtGui.QGraphicsEllipseItem):
         """
         Get the node of the current port.
         Returns:
-            NodeItem: node that's connected to the port.
+            BaseNode: node that's connected to the port.
         """
         return self.parentItem()
 
@@ -273,7 +273,7 @@ class PortItem(QtGui.QGraphicsEllipseItem):
         """
         Gets the connected pipe object.
         Returns:
-            PipeItem: the object of the connected pipe.
+            Pipe: the object of the connected pipe.
         """
         return self._pipe
 
@@ -281,7 +281,7 @@ class PortItem(QtGui.QGraphicsEllipseItem):
         """
         Gets the connected port object.
         Returns:
-            PortItem: the object of the connected port.
+            Port: the object of the connected port.
         """
         if self._pipe:
             if self._port_type is 'in':
@@ -291,69 +291,21 @@ class PortItem(QtGui.QGraphicsEllipseItem):
         return None
 
 
-class NodeSizerItem(QtGui.QGraphicsEllipseItem):
+class BaseRectFrame(QtGui.QGraphicsRectItem):
     """
-    Node sizer handle class.
-    """
-
-    positionChanged = QtCore.Signal(str, str)
-
-    def __init__(self, parent=None, size=6.0):
-        super(NodeSizerItem, self).__init__(QtCore.QRectF(-size/2, -size/2, size, size), parent)
-        self.posChangeCallbacks = []
-        self.setPen(QtGui.QPen(QtGui.QColor('#A18961'), 1))
-        self.setBrush(QtGui.QBrush(QtGui.QColor('#57431A')))
-        self.setFlag(self.ItemIsSelectable, False)
-        self.setFlag(self.ItemIsMovable, True)
-        self.setFlag(self.ItemSendsScenePositionChanges, True)
-        self.setCursor(QtGui.QCursor(QtCore.Qt.SizeFDiagCursor))
-
-    def itemChange(self, change, value):
-        if change == self.ItemPositionChange:
-            x, y = value.x(), value.y()
-            # TODO: make this a signal?
-            # This cannot be a signal because this is not a QObject
-            for cb in self.posChangeCallbacks:
-                res = cb(x, y)
-                if res:
-                    x, y = res
-                    value = QtCore.QPointF(x, y)
-        return super(NodeSizerItem, self).itemChange(change, value)
-
-    def mouseDoubleClickEvent(self, event):
-        self.parentItem().reset_size()
-        super(NodeSizerItem, self).mouseDoubleClickEvent(event)
-
-    def mouseMoveEvent(self, event):
-        super(NodeSizerItem, self).mouseMoveEvent(event)
-        self.setSelected(False)
-
-    def mousePressEvent(self, event):
-        super(NodeSizerItem, self).mousePressEvent(event)
-        self.setSelected(False)
-
-    def mouseReleaseEvent(self, event):
-        super(NodeSizerItem, self).mouseReleaseEvent(event)
-        self.setSelected(False)
-
-
-class BaseRectItem(QtGui.QGraphicsRectItem):
-    """
-    Base shape item.
+    Base frame for a node object.
     """
 
     def __init__(self, parent):
-        super(BaseRectItem, self).__init__(parent)
+        super(BaseRectFrame, self).__init__(parent)
         self._antialiasing = False
         self._color_bg = '#2F3234'
         self._color_border = '#3c4042'
         self.set_node_color()
 
-
-
     def paint(self, painter, option, widget):
         painter.setRenderHint(painter.Antialiasing, self._antialiasing)
-        super(BaseRectItem, self).paint(painter, option, widget)
+        super(BaseRectFrame, self).paint(painter, option, widget)
 
     def set_node_color(self, color='#2F3234', border='#3c4042'):
         """
@@ -368,13 +320,13 @@ class BaseRectItem(QtGui.QGraphicsRectItem):
         self.setPen(QtGui.QPen(QtGui.QColor(self._color_border), 1))
 
 
-class NodeTextBackground(BaseRectItem):
+class NodeLabelBackground(BaseRectFrame):
     """
-    Base node label background shape item.
+    Base node label background shape.
     """
 
     def __init__(self, parent):
-        super(NodeTextBackground, self).__init__(parent)
+        super(NodeLabelBackground, self).__init__(parent)
 
     def mousePressEvent(self, event):
         parent = self.parentItem()
@@ -382,39 +334,28 @@ class NodeTextBackground(BaseRectItem):
             parent.setSelected(True)
 
 
-class NodeItem(BaseRectItem):
+class BaseNode(BaseRectFrame):
     """
-    Base node item.
+    Base node object.
     """
 
     def __init__(self, name='Node', icon=None, parent=None):
-        super(NodeItem, self).__init__(parent)
+        super(BaseNode, self).__init__(parent)
         self.setFlags(self.ItemIsSelectable | self.ItemIsMovable)
         # node
-        self._text_bg_item = NodeTextBackground(self)
+        self._text_bg_item = NodeLabelBackground(self)
         self._text_item = QtGui.QGraphicsTextItem(name, self._text_bg_item)
         self._color_text = '#6b7781'
         self._color_text_bg = '#292c2f'
         self._width = 150
         self._height = 100
-
         # ports in/out
         self._inputs = []
         self._inputsTexts = []
         self._outputs = []
         self._outputsTexts = []
-
-        # node sizer
-        self._sizer = NodeSizerItem(self)
-        self._sizer.posChangeCallbacks.append(self.set_node_size)
-        self._sizer.setFlag(self._sizer.ItemIsSelectable, True)
-        self._sizer.setPos(self._width, self._height)
-        self.setToolTip(
-            'Resize: {}\n(Double Click to Reset)'.format(self.node_name()))
-
-        # initialize setup
+        # initialize
         self.set_text_color()
-        self.set_resizable(True)
 
     def __str__(self):
         class_name = self.__class__.__name__
@@ -431,7 +372,7 @@ class NodeItem(BaseRectItem):
             text_color = QtGui.QColor('#ffb72c')
             self._text_item.setDefaultTextColor(QtGui.QColor('#C58828'))
         else:
-            super(NodeItem, self).paint(painter, option, widget)
+            super(BaseNode, self).paint(painter, option, widget)
             self._text_bg_item.set_node_color(
                 self._color_text_bg, self._color_text_bg)
             text_color = QtGui.QColor(self._color_text)
@@ -461,11 +402,11 @@ class NodeItem(BaseRectItem):
             width += max(pWidths)
             width += pWidths[0]
         pCount = max([len(self._inputs), len(self._outputs)]) + 1
-        height = (PortItem().boundingRect().height() * 2) * pCount
+        height = (Port().boundingRect().height() * 2) * pCount
         return width, height
 
     def _add_port(self, name, type):
-        port = PortItem(self, name, type)
+        port = Port(self, name, type)
         text = QtGui.QGraphicsTextItem(port.name(), self)
         text.setDefaultTextColor(QtGui.QColor(self._color_text))
         font = text.font()
@@ -512,20 +453,11 @@ class NodeItem(BaseRectItem):
         self._color_text = color
         self._text_item.setDefaultTextColor(QtGui.QColor(self._color_text))
 
-    def set_resizable(self, mode=True):
-        """
-        Allow the node to be resizeable.
-        Args:
-            mode (bool): true if the node can be resized.
-        """
-        self._sizer.setVisible(mode)
-
     def reset_size(self):
         """
         Reset the node size to its initial width & height.
         """
         self._width, self._height = self._calc_size()
-        self._sizer.setPos(self._width, self._height)
         self.set_node_size(self._width, self._height)
 
     def add_input_port(self, label='port'):
@@ -691,7 +623,7 @@ class NodeViewer(QtGui.QGraphicsView):
             # switch start point if pipe exists.
             self._start_port = self._start_port.connected_port()
 
-        self._connection_started = PipeConnection(
+        self._connection_started = PipeConnectionGenerator(
             self._start_port, None, self.scene()
         )
 
@@ -703,7 +635,7 @@ class NodeViewer(QtGui.QGraphicsView):
             # find destination port
             to_port = None
             for item in self.scene().items(event.scenePos()):
-                if isinstance(item, PortItem):
+                if isinstance(item, Port):
                     to_port = item
                     break
             # validate port and connection
@@ -718,8 +650,12 @@ class NodeViewer(QtGui.QGraphicsView):
                     connected_pipe.set_dotted(False)
                 end_connection = True
             elif to_port.type() is self._start_port.type():
+                if connected_pipe:
+                    connected_pipe.set_dotted(False)
                 end_connection = True
             elif to_port.node() is self._start_port.node():
+                if connected_pipe:
+                    connected_pipe.set_dotted(False)
                 end_connection = True
 
             # do not remove connected pipe if to_port == from_port

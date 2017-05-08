@@ -3,11 +3,11 @@ import sys
 
 from PySide import QtGui, QtCore
 
-from pySideNodeGraph import NodeItem
+from pySideNodeGraph import BaseNode
 from pySideNodeGraph import NodeScene, NodeViewer
 
 
-class TestNode(NodeItem):
+class TestNode(BaseNode):
 
     def __init__(self, name='Node', parent=None):
         super(TestNode, self).__init__(name, parent)
@@ -38,7 +38,7 @@ class NodeGraph(QtGui.QWidget):
         self.addNode(TestNode('My Node 4'), -800, 0)
 
     def addNode(self, node, xpos=0, ypos=0):
-        assert isinstance(node, NodeItem), 'node must be a NodeItem'
+        assert isinstance(node, BaseNode), 'node must be a NodeItem'
         node.setPos(xpos, ypos)
         self.nodeScene.addItem(node)
 
