@@ -1,10 +1,11 @@
 #!/usr/bin/python
 import sys
+import os
 
 from PySide import QtGui, QtCore
 
-from pySideNodeGraph import BaseNode
-from pySideNodeGraph import NodeScene, NodeViewer
+from nodeGraph.widgets.node import BaseNode
+from nodeGraph.widgets.viewer import NodeScene, NodeViewer
 
 
 class TestNode(BaseNode):
