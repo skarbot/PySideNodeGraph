@@ -290,6 +290,15 @@ class Port(QtGui.QGraphicsEllipseItem):
                 return self._pipe.get_in_port()
         return None
 
+    def delete(self):
+        """
+        Remove port from the node.
+        """
+        if self._pipe:
+            self._pipe.delete()
+        if self.scene():
+            self.scene().removeItem(self)
+
 
 class BaseRectFrame(QtGui.QGraphicsRectItem):
     """
@@ -351,9 +360,9 @@ class BaseNode(BaseRectFrame):
         self._height = 100
         # ports in/out
         self._inputs = []
-        self._inputsTexts = []
+        self._inputs_texts = []
         self._outputs = []
-        self._outputsTexts = []
+        self._outputs_texts = []
         # initialize
         self.set_text_color()
 
@@ -378,7 +387,7 @@ class BaseNode(BaseRectFrame):
             text_color = QtGui.QColor(self._color_text)
             self._text_item.setDefaultTextColor(text_color)
 
-        texts_items = self._inputsTexts + self._outputsTexts
+        texts_items = self._inputs_texts + self._outputs_texts
         for text in texts_items:
             text.setDefaultTextColor(text_color)
 
@@ -414,10 +423,10 @@ class BaseNode(BaseRectFrame):
         text.setFont(font)
         if type == 'in':
             self._inputs.append(port)
-            self._inputsTexts.append(text)
+            self._inputs_texts.append(text)
         elif type == 'out':
             self._outputs.append(port)
-            self._outputsTexts.append(text)
+            self._outputs_texts.append(text)
         self.reset_size()
 
     def add_input_port(self, label='port'):
@@ -525,7 +534,7 @@ class BaseNode(BaseRectFrame):
                 y += y_chunk
 
         # update text position
-        for idx, text in enumerate(self._inputsTexts):
+        for idx, text in enumerate(self._inputs_texts):
             p_rect = self._inputs[idx].boundingRect()
             pw, ph = p_rect.width(), p_rect.height()
             txt_height = text.boundingRect().height()
@@ -533,7 +542,7 @@ class BaseNode(BaseRectFrame):
                 self._inputs[idx].x() + (pw / 2),
                 self._inputs[idx].y() - (txt_height / 2)
             )
-        for idx, text in enumerate(self._outputsTexts):
+        for idx, text in enumerate(self._outputs_texts):
             p_rect = self._outputs[idx].boundingRect()
             pw, ph = p_rect.width(), p_rect.height()
             txt_width = text.boundingRect().width()
@@ -555,12 +564,15 @@ class BaseNode(BaseRectFrame):
         """
         Remove node from the node graph.
         """
-        ports = self._inputs + self._outputs
-        for port in ports:
-            if port.connected_pipe():
-                port.connected_pipe().delete()
         if self.scene():
             self.scene().removeItem(self)
+        port_texts = self._inputs_texts + self._outputs_texts
+        for text in port_texts:
+            if self.scene():
+                self.scene().removeItem(text)
+        ports = self._inputs + self._outputs
+        for port in ports:
+            port.delete()
 
 
 class NodeScene(QtGui.QGraphicsScene):
@@ -701,10 +713,10 @@ class NodeViewer(QtGui.QGraphicsView):
         elif key == QtCore.Qt.Key_F:
             if len(selection) is 1:
                 self.centerOn(selection[0])
-        elif key == QtCore.Qt.Key_Delete or key == QtCore.Qt.Key_Backspace:
-            for item in selection:
-                if isinstance(item, BaseNode):
-                    item.delete()
+        # elif key == QtCore.Qt.Key_Delete or key == QtCore.Qt.Key_Backspace:
+        #     for item in selection:
+        #         if isinstance(item, BaseNode):
+        #             item.delete()
         super(NodeViewer, self).keyPressEvent(event)
 
     def keyReleaseEvent(self, event):
